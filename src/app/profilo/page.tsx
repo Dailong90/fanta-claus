@@ -47,7 +47,7 @@ export default function ProfiloPage({ searchParams }: ProfiloPageProps) {
       {!hasPlayerId && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           Nessun giocatore specificato.  
-          Aggiungi <strong>?playerId=p1</strong> (o altri) all'URL:
+          Aggiungi <strong>?playerId=p1</strong> (o altri) all&apos;URL:
           <br />
           <code>/profilo?playerId=p1</code>
         </Alert>

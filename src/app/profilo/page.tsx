@@ -1,15 +1,17 @@
-"use client";
-
 import { Container, Typography, Box, Alert } from "@mui/material";
 import TeamBuilder from "@/components/TeamBuilder";
 import { participants } from "@/data/participants";
-import { useSearchParams } from "next/navigation";
 import { TEAM_LOCK_DEADLINE_ISO } from "@/config/gameConfig";
 
-export default function ProfiloPage() {
-  const searchParams = useSearchParams();
-  const playerId = searchParams.get("playerId") || "";
-  const hasPlayerId = playerId.trim().length > 0;
+type ProfiloPageProps = {
+  searchParams: {
+    playerId?: string;
+  };
+};
+
+export default function ProfiloPage({ searchParams }: ProfiloPageProps) {
+  const playerId = (searchParams.playerId || "").trim();
+  const hasPlayerId = playerId.length > 0;
 
   const deadline = new Date(TEAM_LOCK_DEADLINE_ISO);
   const now = new Date();
@@ -46,7 +48,7 @@ export default function ProfiloPage() {
         <Alert severity="warning" sx={{ mb: 3 }}>
           Nessun giocatore specificato. Aggiungi <strong>?playerId=p1</strong> (o
           un altro codice) all&apos;URL, ad esempio:{" "}
-          <code>http://localhost:3000/profilo?playerId=p1</code>
+          <code>https://…/profilo?playerId=p1</code>
         </Alert>
       )}
 

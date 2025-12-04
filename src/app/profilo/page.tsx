@@ -3,6 +3,8 @@ import TeamBuilder from "@/components/TeamBuilder";
 import { participants } from "@/data/participants";
 import { TEAM_LOCK_DEADLINE_ISO } from "@/config/gameConfig";
 
+export const dynamic = "force-dynamic";
+
 type ProfiloPageProps = {
   searchParams: {
     playerId?: string;

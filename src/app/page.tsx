@@ -1,79 +1,137 @@
 "use client";
 
-import { Container, Typography, Box, Stack, Button, Paper } from "@mui/material";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  Box,
+  Container,
+  Typography,
+  Button,
+  Paper,
+  Stack,
+} from "@mui/material";
 
 export default function HomePage() {
+  const router = useRouter();
+
+  const handleGoToLogin = () => {
+    router.push("/login");
+  };
+
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h3" component="h1" gutterBottom>
-          Fanta Claus 🎅
-        </Typography>
-        <Typography variant="subtitle1">
-          Fanta Secret Santa aziendale – crea la tua squadra di colleghi e
-          guadagna punti in base ai regali che faranno.
-        </Typography>
-      </Box>
-
-      {/* Regole base */}
-      <Paper sx={{ p: 3, mb: 3 }} elevation={3}>
-        <Typography variant="h5" component="h2" gutterBottom>
-          Regole base del gioco
-        </Typography>
-        <Typography component="ul" sx={{ pl: 3 }}>
-          <li>Ogni partecipante al Secret Santa può creare la propria squadra.</li>
-          <li>La squadra è composta da 7 persone (numero modificabile più avanti).</li>
-          <li>Guadagni punti in base ai regali fatti dalle persone che hai in squadra.</li>
-          <li>
-            Le categorie di regalo (goliardico, sconcio, accessorio tech, ecc.)
-            assegnano punteggi diversi.
-          </li>
-          <li>
-            Entro una data limite potrai modificare la tua squadra, poi le squadre verranno
-            bloccate.
-          </li>
-        </Typography>
-      </Paper>
-
-      {/* Categorie & punteggi (placeholder) */}
-      <Paper sx={{ p: 3, mb: 4 }} elevation={2}>
-        <Typography variant="h5" component="h2" gutterBottom>
-          Categorie regalo & punteggi
-        </Typography>
-        <Typography sx={{ mb: 1 }}>
-          I punteggi esatti verranno definiti dall&apos;organizzatore. Esempi:
-        </Typography>
-        <Typography component="ul" sx={{ pl: 3 }}>
-          <li>🎉 Goliardico: 10 punti</li>
-          <li>🔥 Sconcio: 15 punti</li>
-          <li>🖥️ Accessorio tech: 5 punti</li>
-          <li>☕ Tazza: -2 punti</li>
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          Queste regole saranno aggiornate ufficialmente nella pagina prima dell&apos;inizio del gioco.
-        </Typography>
-      </Paper>
-
-      {/* Navigazione principale */}
-      <Stack direction="row" spacing={2}>
-        <Button
-          component={Link}
-          href="/profilo"
-          variant="contained"
+    <Box
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "#0b1020",
+        display: "flex",
+        alignItems: "center",
+        color: "white",
+      }}
+    >
+      <Container maxWidth="md">
+        <Paper
+          elevation={6}
+          sx={{
+            bgcolor: "rgba(15, 23, 42, 0.9)",
+            borderRadius: 3,
+            p: { xs: 3, sm: 4, md: 5 },
+            border: "1px solid rgba(148, 163, 184, 0.4)",
+          }}
         >
-          Vai al tuo profilo
-        </Button>
+          <Stack spacing={3} alignItems="center">
+            {/* LOGO / TITOLO */}
+            <Box sx={{ textAlign: "center" }}>
+              {/* Qui in futuro puoi mettere un <Image /> con il logo vero */}
+              <Typography
+                variant="h3"
+                component="h1"
+                sx={{
+                  fontWeight: "bold",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Fanta Claus
+              </Typography>
+              <Typography
+                variant="subtitle1"
+                sx={{ mt: 1, color: "rgba(226,232,240,0.8)" }}
+              >
+                Il fantagioco segreto del Secret Santa aziendale 🎅
+              </Typography>
+            </Box>
 
-        <Button
-          component={Link}
-          href="/admin"
-          variant="outlined"
-        >
-          Area admin
-        </Button>
-      </Stack>
-    </Container>
+            {/* DESCRIZIONE BREVE */}
+            <Typography
+              variant="body1"
+              sx={{ textAlign: "center", color: "rgba(226,232,240,0.9)" }}
+            >
+              Ognuno ha pescato un collega a cui fare il regalo.
+              Con il Fanta Claus scegli la tua squadra di colleghi
+              e fai punti in base ai regali che hanno fatto loro.
+            </Typography>
+
+            {/* REGOLE BASE */}
+            <Box sx={{ width: "100%" }}>
+              <Typography
+                variant="h6"
+                sx={{ mb: 1.5, textAlign: "center", fontWeight: 600 }}
+              >
+                Regole in breve
+              </Typography>
+
+              <Stack
+                spacing={1}
+                sx={{ fontSize: 14, color: "rgba(226,232,240,0.9)" }}
+              >
+                <Typography>
+                  • Ogni partecipante crea una <strong>squadra di 7 colleghi</strong>.
+                </Typography>
+                <Typography>
+                  • Puoi scegliere solo tra i partecipanti al Secret Santa.
+                </Typography>
+                <Typography>
+                  • Ogni collega in squadra fa punti in base al{" "}
+                  <strong>tipo di regalo</strong> che ha fatto.
+                </Typography>
+                <Typography>
+                  • Puoi nominare un <strong>capitano</strong> (in futuro potrebbe
+                  valere punti extra 😉).
+                </Typography>
+                <Typography>
+                  • Hai tempo fino alla <strong>scadenza indicata nel tuo profilo</strong>{" "}
+                  per modificare la squadra.
+                </Typography>
+              </Stack>
+            </Box>
+
+            {/* CTA LOGIN */}
+            <Box sx={{ mt: 2 }}>
+              <Button
+                variant="contained"
+                size="large"
+                onClick={handleGoToLogin}
+                sx={{
+                  textTransform: "none",
+                  fontWeight: 600,
+                  px: 4,
+                  py: 1.2,
+                  borderRadius: 999,
+                }}
+              >
+                Entra con il tuo codice
+              </Button>
+            </Box>
+
+            {/* NOTA SEMPLICE */}
+            <Typography
+              variant="caption"
+              sx={{ mt: 1, textAlign: "center", color: "rgba(148,163,184,0.9)" }}
+            >
+              Il codice ti è stato assegnato dall&apos;organizzatore del Fanta Claus.
+            </Typography>
+          </Stack>
+        </Paper>
+      </Container>
+    </Box>
   );
 }

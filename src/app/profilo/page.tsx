@@ -1,7 +1,15 @@
-"use client";
+import ProfiloClientShell from "./ProfiloClientShell";
 
-import ProfiloClient from "./ProfiloClient";
+type ProfiloPageProps = {
+  searchParams?: {
+    playerId?: string;
+  };
+};
 
-export default function ProfiloPage() {
-  return <ProfiloClient />;
+export const dynamic = "force-dynamic";
+
+export default function ProfiloPage({ searchParams }: ProfiloPageProps) {
+  const playerId = (searchParams?.playerId ?? "").trim();
+
+  return <ProfiloClientShell playerId={playerId} />;
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { Container, Typography, Box, Alert } from "@mui/material";
 import TeamBuilder from "@/components/TeamBuilder";
 import { participants } from "@/data/participants";
@@ -9,14 +8,14 @@ import { TEAM_LOCK_DEADLINE_ISO } from "@/config/gameConfig";
 
 const deadline = new Date(TEAM_LOCK_DEADLINE_ISO);
 
-export default function ProfiloClient() {
-  const searchParams = useSearchParams();
-  const playerId = (searchParams.get("playerId") || "").trim();
-  const hasPlayerId = playerId.length > 0;
+type ProfiloClientShellProps = {
+  playerId: string;
+};
 
+export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps) {
+  const hasPlayerId = playerId.trim().length > 0;
   const [isLocked, setIsLocked] = useState(false);
 
-  // Calcolo solo lato client per evitare mismatch SSR/CSR
   useEffect(() => {
     setIsLocked(new Date() > deadline);
   }, []);
@@ -44,7 +43,7 @@ export default function ProfiloClient() {
           })}
         </strong>
         {isLocked
-          ? " – Il periodo per modificare la squadra è terminato: ora puoi solo visualizzarla."
+          ? " – Il periodo per modificare la squadra è terminato. Ora puoi solo visualizzarla."
           : " – Puoi ancora modificare la tua squadra fino a questa data."}
       </Alert>
 

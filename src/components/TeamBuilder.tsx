@@ -95,41 +95,63 @@ export default function TeamBuilder({
     loadTeam();
   }, [playerId, storageKey]);
 
-  // Salva squadra su Supabase (e in localStorage) quando cambia
-  useEffect(() => {
-    const saveTeam = async () => {
-      // cache locale
-      if (typeof window !== "undefined") {
-        const payloadLocal = {
-          members: selectedIds,
-          captainId: captainId || null,
+    // Salva squadra su Supabase (e in localStorage) quando cambia
+    useEffect(() => {
+        const saveTeam = async () => {
+        // Salvo sempre in locale (cache)
+        if (typeof window !== "undefined") {
+            const payloadLocal = {
+            members: selectedIds,
+            captainId: captainId || null,
+            };
+            window.localStorage.setItem(storageKey, JSON.stringify(payloadLocal));
+        }
+
+        // Se la squadra è bloccata, non mando nulla a Supabase
+        if (isLocked) {
+            console.log(
+            "⛔ Squadra bloccata, non invio nulla a Supabase per",
+            playerId
+            );
+            return;
+        }
+
+        const payload: StoredTeam = {
+            owner_id: playerId,
+            members: selectedIds,
+            captain_id: captainId || null,
         };
-        window.localStorage.setItem(storageKey, JSON.stringify(payloadLocal));
-      }
 
-      if (isLocked) return;
+        // Log chiaro sia in dev che in prod
+        console.log("[FantaClaus] 💾 Salvo squadra su Supabase:", payload);
 
-      const payload: StoredTeam = {
-        owner_id: playerId,
-        members: selectedIds,
-        captain_id: captainId || null,
-      };
+        try {
+            const { data, error } = await supabase
+            .from("teams")
+            .upsert(payload, { onConflict: "owner_id" });
 
-      console.log("💾 Salvo squadra su Supabase:", payload);
+            if (error) {
+            console.error("[FantaClaus] ❌ Errore Supabase upsert teams", error);
+            if (typeof window !== "undefined") {
+                alert("Errore nel salvataggio su Supabase: " + error.message);
+            }
+            return;
+            }
 
-      const { error } = await supabase.from("teams").upsert(payload);
+            console.log("[FantaClaus] ✅ Squadra salvata su Supabase:", data);
+        } catch (err) {
+            console.error("[FantaClaus] ❌ Errore runtime salvataggio", err);
+            if (typeof window !== "undefined") {
+            alert("Errore inatteso nel salvataggio. Controlla la console.");
+            }
+        }
+        };
 
-      if (error) {
-        console.error("❌ Errore Supabase upsert teams", error);
-      } else {
-        console.log("✅ Squadra salvata su Supabase");
-      }
-    };
+        if (!loading) {
+        saveTeam();
+        }
+    }, [selectedIds, captainId, playerId, storageKey, isLocked, loading]);
 
-    if (!loading) {
-      saveTeam();
-    }
-  }, [selectedIds, captainId, playerId, storageKey, isLocked, loading]);
 
   const toggleMember = (id: string) => {
     if (isLocked) return;

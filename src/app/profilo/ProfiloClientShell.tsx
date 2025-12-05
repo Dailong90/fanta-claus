@@ -8,17 +8,21 @@ import { TEAM_LOCK_DEADLINE_ISO } from "@/config/gameConfig";
 
 const deadline = new Date(TEAM_LOCK_DEADLINE_ISO);
 
-type ProfiloClientShellProps = {
-  playerId: string;
-};
-
-export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps) {
-  const hasPlayerId = playerId.trim().length > 0;
+export default function ProfiloClientShell() {
+  const [playerId, setPlayerId] = useState("");
   const [isLocked, setIsLocked] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("playerId") ?? "";
+
+    setPlayerId(id.trim());
     setIsLocked(new Date() > deadline);
+    setInitialized(true);
   }, []);
+
+  const hasPlayerId = initialized && playerId.length > 0;
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -47,7 +51,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
           : " – Puoi ancora modificare la tua squadra fino a questa data."}
       </Alert>
 
-      {!hasPlayerId && (
+      {initialized && !hasPlayerId && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           Nessun giocatore specificato. Aggiungi <strong>?playerId=p1</strong>{" "}
           (o altri) all&apos;URL:

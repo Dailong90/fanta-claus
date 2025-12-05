@@ -10,17 +10,19 @@ import {
   CardContent,
   Chip,
 } from "@mui/material";
+import { supabase } from "@/lib/supabaseClient";
 
 type TeamBuilderProps = {
   participants: Participant[];
   maxMembers?: number;
-  playerId: string;     // chi sta creando/modificando la squadra
-  isLocked?: boolean;   // se true, non si può più modificare
+  playerId: string;
+  isLocked?: boolean;
 };
 
 type StoredTeam = {
+  owner_id: string;
   members: string[];
-  captainId?: string;
+  captain_id: string | null;
 };
 
 export default function TeamBuilder({
@@ -31,61 +33,103 @@ export default function TeamBuilder({
 }: TeamBuilderProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [captainId, setCaptainId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
   const storageKey = `fanta_claus_team_${playerId}`;
 
-  // 🔹 carica squadra (compatibile con vecchio formato)
+  // Carica squadra: prima da Supabase, poi eventualmente da localStorage
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const loadTeam = async () => {
+      setLoading(true);
 
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) {
-      setSelectedIds([]);
-      setCaptainId("");
-      return;
-    }
+      console.log("🔎 Carico squadra da Supabase per", playerId);
 
-    try {
-      const parsed = JSON.parse(raw) as any;
+      const { data, error } = await supabase
+        .from("teams")
+        .select("*")
+        .eq("owner_id", playerId)
+        .maybeSingle();
 
-      if (Array.isArray(parsed)) {
-        // formato vecchio: ["p1","p2",...]
-        setSelectedIds(parsed);
-        setCaptainId("");
-      } else if (parsed && Array.isArray(parsed.members)) {
-        // nuovo formato
-        setSelectedIds(parsed.members);
-        if (typeof parsed.captainId === "string") {
-          setCaptainId(parsed.captainId);
+      if (error) {
+        console.error("❌ Errore Supabase loadTeam", error);
+      }
+
+      if (data) {
+        const team = data as StoredTeam;
+        console.log("✅ Squadra trovata su Supabase:", team);
+        setSelectedIds(team.members || []);
+        setCaptainId(team.captain_id || "");
+        setLoading(false);
+        return;
+      }
+
+      // Fallback vecchia versione: localStorage
+      if (typeof window !== "undefined") {
+        const raw = window.localStorage.getItem(storageKey);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as any;
+            if (Array.isArray(parsed)) {
+              setSelectedIds(parsed);
+              setCaptainId("");
+            } else if (parsed && Array.isArray(parsed.members)) {
+              setSelectedIds(parsed.members);
+              setCaptainId(
+                typeof parsed.captainId === "string" ? parsed.captainId : ""
+              );
+            }
+          } catch (e) {
+            console.error("Errore parse squadra localStorage", e);
+            setSelectedIds([]);
+            setCaptainId("");
+          }
         } else {
+          setSelectedIds([]);
           setCaptainId("");
         }
-      } else {
-        setSelectedIds([]);
-        setCaptainId("");
       }
-    } catch (err) {
-      console.error("Errore nel parse della squadra salvata", err);
-      setSelectedIds([]);
-      setCaptainId("");
-    }
-  }, [storageKey]);
 
-  // 🔹 salva squadra solo se non è bloccata (ma carichiamo sempre per visualizzare)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (isLocked) return; // dopo la scadenza non sovrascrivo più
-
-    const payload: StoredTeam = {
-      members: selectedIds,
+      setLoading(false);
     };
 
-    if (captainId && selectedIds.includes(captainId)) {
-      payload.captainId = captainId;
-    }
+    loadTeam();
+  }, [playerId, storageKey]);
 
-    window.localStorage.setItem(storageKey, JSON.stringify(payload));
-  }, [selectedIds, captainId, storageKey, isLocked]);
+  // Salva squadra su Supabase (e in localStorage) quando cambia
+  useEffect(() => {
+    const saveTeam = async () => {
+      // cache locale
+      if (typeof window !== "undefined") {
+        const payloadLocal = {
+          members: selectedIds,
+          captainId: captainId || null,
+        };
+        window.localStorage.setItem(storageKey, JSON.stringify(payloadLocal));
+      }
+
+      if (isLocked) return;
+
+      const payload: StoredTeam = {
+        owner_id: playerId,
+        members: selectedIds,
+        captain_id: captainId || null,
+      };
+
+      console.log("💾 Salvo squadra su Supabase:", payload);
+
+      const { error } = await supabase.from("teams").upsert(payload);
+
+      if (error) {
+        console.error("❌ Errore Supabase upsert teams", error);
+      } else {
+        console.log("✅ Squadra salvata su Supabase");
+      }
+    };
+
+    if (!loading) {
+      saveTeam();
+    }
+  }, [selectedIds, captainId, playerId, storageKey, isLocked, loading]);
 
   const toggleMember = (id: string) => {
     if (isLocked) return;
@@ -93,16 +137,11 @@ export default function TeamBuilder({
     setSelectedIds((prev) => {
       if (prev.includes(id)) {
         const newMembers = prev.filter((m) => m !== id);
-        if (captainId === id) {
-          setCaptainId("");
-        }
+        if (captainId === id) setCaptainId("");
         return newMembers;
       }
 
-      if (prev.length >= maxMembers) {
-        return prev;
-      }
-
+      if (prev.length >= maxMembers) return prev;
       return [...prev, id];
     });
   };
@@ -130,7 +169,12 @@ export default function TeamBuilder({
         Giocatori selezionati: {selectedIds.length} / {maxMembers}
       </Typography>
 
-      {/* Griglia partecipanti */}
+      {loading && (
+        <Typography variant="body2" sx={{ mb: 2 }}>
+          Caricamento squadra...
+        </Typography>
+      )}
+
       <Box
         sx={{
           display: "grid",
@@ -186,7 +230,6 @@ export default function TeamBuilder({
         })}
       </Box>
 
-      {/* Riepilogo */}
       <Box sx={{ mt: 3 }}>
         <Typography variant="subtitle1" gutterBottom>
           Riepilogo squadra

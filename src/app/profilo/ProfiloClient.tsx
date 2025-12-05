@@ -1,20 +1,25 @@
-// src/app/profilo/ProfiloClient.tsx
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Container, Typography, Box, Alert } from "@mui/material";
 import TeamBuilder from "@/components/TeamBuilder";
 import { participants } from "@/data/participants";
 import { TEAM_LOCK_DEADLINE_ISO } from "@/config/gameConfig";
 
+const deadline = new Date(TEAM_LOCK_DEADLINE_ISO);
+
 export default function ProfiloClient() {
   const searchParams = useSearchParams();
   const playerId = (searchParams.get("playerId") || "").trim();
   const hasPlayerId = playerId.length > 0;
 
-  const deadline = new Date(TEAM_LOCK_DEADLINE_ISO);
-  const now = new Date();
-  const isLocked = now > deadline;
+  const [isLocked, setIsLocked] = useState(false);
+
+  // Calcolo solo lato client per evitare mismatch SSR/CSR
+  useEffect(() => {
+    setIsLocked(new Date() > deadline);
+  }, []);
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>

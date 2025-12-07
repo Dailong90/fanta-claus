@@ -9,11 +9,6 @@ type TeamRow = {
   captain_id: string | null;
 };
 
-type PlayerRow = {
-  owner_id: string;
-  name: string | null;
-};
-
 type GiftRow = {
   santa_owner_id: string;
   category_id: string;
@@ -23,6 +18,20 @@ type GiftRow = {
 type CategoryRow = {
   id: string;
   points: number;
+};
+
+type MemberScore = {
+  id: string;
+  name: string;
+  points: number;
+  isCaptain: boolean;
+};
+
+type TeamScore = {
+  ownerId: string;
+  ownerName: string;
+  totalPoints: number;
+  members: MemberScore[];
 };
 
 export async function GET() {
@@ -98,15 +107,8 @@ export async function GET() {
   });
 
   // Calcolo punteggio squadra
-  type MemberScore = {
-    id: string;
-    name: string;
-    points: number;
-    isCaptain: boolean;
-  };
-
-  const leaderboard = (teams as TeamRow[])
-    .map((t) => {
+  const leaderboard: TeamScore[] = (teams as TeamRow[])
+    .map<TeamScore | null>((t) => {
       const members = t.members ?? [];
       if (!Array.isArray(members) || members.length === 0) {
         return null; // squadra vuota → la saltiamo
@@ -139,8 +141,9 @@ export async function GET() {
         members: membersDetailed,
       };
     })
-    .filter(Boolean) // rimuove i null
-    .sort((a: any, b: any) => b.totalPoints - a.totalPoints);
+    // rimuove i null in modo tip-safe
+    .filter((team): team is TeamScore => team !== null)
+    .sort((a, b) => b.totalPoints - a.totalPoints);
 
   return NextResponse.json({ teams: leaderboard });
 }

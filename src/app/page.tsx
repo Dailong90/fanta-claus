@@ -9,6 +9,7 @@ import {
   Paper,
   Stack,
 } from "@mui/material";
+import { fantaPalette } from "@/theme/fantaPalette";
 
 export default function HomePage() {
   const router = useRouter();
@@ -21,26 +22,34 @@ export default function HomePage() {
     <Box
       sx={{
         minHeight: "100vh",
-        bgcolor: "#0b1020",
         display: "flex",
         alignItems: "center",
-        color: "white",
+        justifyContent: "center",
+
+        // 🎄 SFONDO NATALIZIO DA fantaPalette
+        backgroundImage: `${fantaPalette.bgGradient}, ${fantaPalette.snowDots}`,
+        backgroundBlendMode: "normal",
+        backgroundSize: "cover, 180px 180px",
+        backgroundPosition: "center, 0 0",
+        backgroundRepeat: "no-repeat, repeat",
+
+        px: 2,
       }}
     >
       <Container maxWidth="md">
         <Paper
           elevation={6}
           sx={{
-            bgcolor: "rgba(15, 23, 42, 0.9)",
-            borderRadius: 3,
+            bgcolor: fantaPalette.cardBg,
+            borderRadius: 4,
             p: { xs: 3, sm: 4, md: 5 },
-            border: "1px solid rgba(148, 163, 184, 0.4)",
+            border: `1px solid ${fantaPalette.cardBorder}`,
+            boxShadow: fantaPalette.cardShadow,
           }}
         >
           <Stack spacing={3} alignItems="center">
             {/* LOGO / TITOLO */}
             <Box sx={{ textAlign: "center" }}>
-              {/* Qui in futuro puoi mettere un <Image /> con il logo vero */}
               <Typography
                 variant="h3"
                 component="h1"
@@ -48,13 +57,14 @@ export default function HomePage() {
                   fontWeight: "bold",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
+                  color: "#e11d48", // rosso acceso per il titolo
                 }}
               >
                 Fanta Claus
               </Typography>
               <Typography
                 variant="subtitle1"
-                sx={{ mt: 1, color: "rgba(226,232,240,0.8)" }}
+                sx={{ mt: 1, color: fantaPalette.textSecondary }}
               >
                 Il fantagioco segreto del Secret Santa aziendale 🎅
               </Typography>
@@ -63,7 +73,10 @@ export default function HomePage() {
             {/* DESCRIZIONE BREVE */}
             <Typography
               variant="body1"
-              sx={{ textAlign: "center", color: "rgba(226,232,240,0.9)" }}
+              sx={{
+                textAlign: "center",
+                color: fantaPalette.textPrimary,
+              }}
             >
               Ognuno ha pescato un collega a cui fare il regalo.
               Con il Fanta Claus scegli la tua squadra di colleghi
@@ -74,17 +87,26 @@ export default function HomePage() {
             <Box sx={{ width: "100%" }}>
               <Typography
                 variant="h6"
-                sx={{ mb: 1.5, textAlign: "center", fontWeight: 600 }}
+                sx={{
+                  mb: 1.5,
+                  textAlign: "center",
+                  fontWeight: 600,
+                  color: fantaPalette.textPrimary,
+                }}
               >
                 Regole in breve
               </Typography>
 
               <Stack
                 spacing={1}
-                sx={{ fontSize: 14, color: "rgba(226,232,240,0.9)" }}
+                sx={{
+                  fontSize: 14,
+                  color: fantaPalette.textSecondary,
+                }}
               >
                 <Typography>
-                  • Ogni partecipante crea una <strong>squadra di 7 colleghi</strong>.
+                  • Ogni partecipante crea una{" "}
+                  <strong>squadra di 7 colleghi</strong>.
                 </Typography>
                 <Typography>
                   • Puoi scegliere solo tra i partecipanti al Secret Santa.
@@ -94,12 +116,13 @@ export default function HomePage() {
                   <strong>tipo di regalo</strong> che ha fatto.
                 </Typography>
                 <Typography>
-                  • Puoi nominare un <strong>capitano</strong> (in futuro potrebbe
-                  valere punti extra 😉).
+                  • Puoi nominare un <strong>capitano</strong> (in futuro
+                  potrebbe valere punti extra 😉).
                 </Typography>
                 <Typography>
-                  • Hai tempo fino alla <strong>scadenza indicata nel tuo profilo</strong>{" "}
-                  per modificare la squadra.
+                  • Hai tempo fino alla{" "}
+                  <strong>scadenza indicata nel tuo profilo</strong> per
+                  modificare la squadra.
                 </Typography>
               </Stack>
             </Box>
@@ -116,6 +139,13 @@ export default function HomePage() {
                   px: 4,
                   py: 1.2,
                   borderRadius: 999,
+                  backgroundImage: fantaPalette.buttonGradient,
+                  color: fantaPalette.buttonText,
+                  boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+                  "&:hover": {
+                    backgroundImage: fantaPalette.buttonGradientHover,
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.3)",
+                  },
                 }}
               >
                 Entra con il tuo codice
@@ -125,9 +155,14 @@ export default function HomePage() {
             {/* NOTA SEMPLICE */}
             <Typography
               variant="caption"
-              sx={{ mt: 1, textAlign: "center", color: "rgba(148,163,184,0.9)" }}
+              sx={{
+                mt: 1,
+                textAlign: "center",
+                color: fantaPalette.textMuted,
+              }}
             >
-              Il codice ti è stato assegnato dall&apos;organizzatore del Fanta Claus.
+              Il codice ti è stato assegnato dall&apos;organizzatore del Fanta
+              Claus.
             </Typography>
           </Stack>
         </Paper>

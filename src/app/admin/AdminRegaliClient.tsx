@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Box,
   Container,
@@ -54,6 +54,8 @@ type GiftMap = Record<
   }
 >;
 
+type FilterMode = "all" | "missing" | "assigned";
+
 export default function AdminRegaliClient({
   currentAdminName,
   players,
@@ -62,6 +64,7 @@ export default function AdminRegaliClient({
   const [giftMap, setGiftMap] = useState<GiftMap>({});
   const [loadingGifts, setLoadingGifts] = useState(true);
   const [savingFor, setSavingFor] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
   // Carica i gift esistenti da /api/admin/gifts
   useEffect(() => {
@@ -92,41 +95,26 @@ export default function AdminRegaliClient({
     loadGifts();
   }, []);
 
-  const handleChangeCategory = async (
-    santa_owner_id: string,
-    category_id: string
-  ) => {
-    setGiftMap((prev) => ({
-      ...prev,
-      [santa_owner_id]: {
-        category_id,
-        bonus_points: prev[santa_owner_id]?.bonus_points ?? 0,
-      },
-    }));
+  // Statistiche: quanti hanno già una categoria assegnata
+  const totalPlayers = players.length;
+  const assignedCount = useMemo(() => {
+    return players.filter((p) => {
+      const g = giftMap[p.owner_id];
+      return g && g.category_id;
+    }).length;
+  }, [players, giftMap]);
 
-    await saveGift(santa_owner_id, category_id, giftMap[santa_owner_id]?.bonus_points ?? 0);
-  };
+  // Lista filtrata in base al filtro selezionato
+  const filteredPlayers = useMemo(() => {
+    return players.filter((p) => {
+      const g = giftMap[p.owner_id];
+      const hasCategory = !!g?.category_id;
 
-  const handleChangeBonus = async (
-    santa_owner_id: string,
-    bonusStr: string
-  ) => {
-    const bonus = Number.isFinite(Number(bonusStr)) ? Number(bonusStr) : 0;
-
-    setGiftMap((prev) => ({
-      ...prev,
-      [santa_owner_id]: {
-        category_id: prev[santa_owner_id]?.category_id ?? "",
-        bonus_points: bonus,
-      },
-    }));
-
-    await saveGift(
-      santa_owner_id,
-      giftMap[santa_owner_id]?.category_id ?? "",
-      bonus
-    );
-  };
+      if (filterMode === "missing") return !hasCategory;
+      if (filterMode === "assigned") return hasCategory;
+      return true; // all
+    });
+  }, [players, giftMap, filterMode]);
 
   const saveGift = async (
     santa_owner_id: string,
@@ -134,7 +122,7 @@ export default function AdminRegaliClient({
     bonus_points: number
   ) => {
     if (!category_id) {
-      // se non c'è categoria non salvo nulla (puoi cambiare questa logica)
+      // se non c'è categoria non salvo (puoi cambiare questa logica se vuoi)
       return;
     }
 
@@ -151,7 +139,11 @@ export default function AdminRegaliClient({
       });
 
       if (!res.ok) {
-        console.error("Errore salvataggio gift per", santa_owner_id, await res.text());
+        console.error(
+          "Errore salvataggio gift per",
+          santa_owner_id,
+          await res.text()
+        );
       }
     } catch (err) {
       console.error("Eccezione salvataggio gift per", santa_owner_id, err);
@@ -160,11 +152,57 @@ export default function AdminRegaliClient({
     }
   };
 
+  const handleChangeCategory = async (
+    santa_owner_id: string,
+    category_id: string
+  ) => {
+    setGiftMap((prev) => {
+      const prevGift = prev[santa_owner_id] ?? { category_id: "", bonus_points: 0 };
+      const updated: GiftMap = {
+        ...prev,
+        [santa_owner_id]: {
+          category_id,
+          bonus_points: prevGift.bonus_points,
+        },
+      };
+      // Chiamo saveGift con i valori aggiornati
+      saveGift(santa_owner_id, category_id, prevGift.bonus_points);
+      return updated;
+    });
+  };
+
+  const handleChangeBonus = async (
+    santa_owner_id: string,
+    bonusStr: string
+  ) => {
+    const bonus = Number.isFinite(Number(bonusStr)) ? Number(bonusStr) : 0;
+
+    setGiftMap((prev) => {
+      const prevGift = prev[santa_owner_id] ?? { category_id: "", bonus_points: 0 };
+      const updatedGift = {
+        category_id: prevGift.category_id,
+        bonus_points: bonus,
+      };
+
+      const updated: GiftMap = {
+        ...prev,
+        [santa_owner_id]: updatedGift,
+      };
+
+      // Salvo solo se esiste già una categoria
+      if (updatedGift.category_id) {
+        saveGift(santa_owner_id, updatedGift.category_id, bonus);
+      }
+
+      return updated;
+    });
+  };
+
   return (
     <Box
       sx={{
         minHeight: "100vh",
-        bgcolor: "#020617",
+        bgcolor: "background.default",
         color: "white",
         py: 4,
       }}
@@ -173,8 +211,19 @@ export default function AdminRegaliClient({
         <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
           Area Admin Fanta Claus 🎅
         </Typography>
-        <Typography variant="subtitle1" sx={{ mb: 3, color: "gray.300" }}>
+        <Typography variant="subtitle1" sx={{ mb: 1, color: "gray.300" }}>
           Loggato come <strong>{currentAdminName}</strong>
+        </Typography>
+
+        {/* Riepilogo stato assegnazioni */}
+        <Typography
+          variant="body2"
+          sx={{ mb: 3, color: "rgba(148,163,184,1)" }}
+        >
+          Regali assegnati:{" "}
+          <strong>
+            {assignedCount} / {totalPlayers}
+          </strong>
         </Typography>
 
         <Stack spacing={3}>
@@ -182,7 +231,7 @@ export default function AdminRegaliClient({
           <Paper
             sx={{
               p: 2.5,
-              bgcolor: "rgba(15,23,42,0.9)",
+              bgcolor: "background.paper",
               borderRadius: 3,
               border: "1px solid rgba(148,163,184,0.4)",
             }}
@@ -237,46 +286,89 @@ export default function AdminRegaliClient({
           <Paper
             sx={{
               p: 2.5,
-              bgcolor: "rgba(15,23,42,0.9)",
+              bgcolor: "background.paper",
               borderRadius: 3,
               border: "1px solid rgba(148,163,184,0.4)",
             }}
           >
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Assegna categoria di regalo ai partecipanti
-            </Typography>
+            <Box
+              sx={{
+                mb: 2,
+                display: "flex",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 2,
+              }}
+            >
+              <Typography variant="h6">
+                Assegna categoria di regalo ai partecipanti
+              </Typography>
+
+              {/* Filtro */}
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel id="filter-mode-label">Filtro</InputLabel>
+                <Select
+                  labelId="filter-mode-label"
+                  value={filterMode}
+                  label="Filtro"
+                  onChange={(e) =>
+                    setFilterMode(e.target.value as FilterMode)
+                  }
+                >
+                  <MenuItem value="all">Tutti i partecipanti</MenuItem>
+                  <MenuItem value="missing">
+                    Solo senza categoria assegnata
+                  </MenuItem>
+                  <MenuItem value="assigned">
+                    Solo con categoria assegnata
+                  </MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
 
             {loadingGifts ? (
               <Box sx={{ py: 4, textAlign: "center" }}>
                 <CircularProgress size={28} />
               </Box>
+            ) : filteredPlayers.length === 0 ? (
+              <Typography variant="body2">
+                Nessun partecipante da mostrare con il filtro attuale.
+              </Typography>
             ) : (
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                    <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
                       Partecipante
                     </TableCell>
-                    <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                    <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
                       Categoria regalo
                     </TableCell>
-                    <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                    <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
                       Bonus / malus
                     </TableCell>
-                    <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                    <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
                       Stato
                     </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {players.map((p) => {
+                  {filteredPlayers.map((p) => {
                     const gift = giftMap[p.owner_id] ?? {
                       category_id: "",
                       bonus_points: 0,
                     };
+                    const hasCategory = !!gift.category_id;
 
                     return (
-                      <TableRow key={p.owner_id}>
+                      <TableRow
+                        key={p.owner_id}
+                        sx={{
+                          bgcolor: hasCategory
+                            ? "rgba(16, 152, 66, 0.08)"
+                            : "transparent",
+                        }}
+                      >
                         <TableCell>
                           <Box>
                             <Typography>{p.name ?? "(senza nome)"}</Typography>
@@ -310,7 +402,11 @@ export default function AdminRegaliClient({
                               </MenuItem>
                               {categories.map((cat) => (
                                 <MenuItem key={cat.id} value={cat.id}>
-                                  {cat.label} ({cat.points >= 0 ? `+${cat.points}` : cat.points} pt)
+                                  {cat.label} (
+                                  {cat.points >= 0
+                                    ? `+${cat.points}`
+                                    : cat.points}{" "}
+                                  pt)
                                 </MenuItem>
                               ))}
                             </Select>
@@ -334,11 +430,11 @@ export default function AdminRegaliClient({
                           {savingFor === p.owner_id ? (
                             <Typography
                               variant="caption"
-                              sx={{ color: "rgba(96,165,250,1)" }}
+                              sx={{ color: "rgba(0, 0, 0, 1)" }}
                             >
                               Salvataggio...
                             </Typography>
-                          ) : gift.category_id ? (
+                          ) : hasCategory ? (
                             <Typography
                               variant="caption"
                               sx={{ color: "rgba(52,211,153,1)" }}

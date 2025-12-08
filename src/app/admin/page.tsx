@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Box, CircularProgress, Typography } from "@mui/material";
+import {
+  Box,
+  CircularProgress,
+  Typography,
+  Container,
+  Paper,
+} from "@mui/material";
 import AdminRegaliClient from "./AdminRegaliClient";
+import { fantaPalette } from "@/theme/fantaPalette";
 
 type PlayerRow = {
   owner_id: string;
@@ -58,19 +65,42 @@ export default function AdminPage() {
     load();
   }, [router]);
 
+  // LAYOUT COMUNE: sfondo Fanta Claus + card centrale
   if (loading) {
     return (
       <Box
         sx={{
           minHeight: "100vh",
-          bgcolor: "#020617",
-          color: "white",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          backgroundImage: `${fantaPalette.bgGradient}, ${fantaPalette.snowDots}`,
+          backgroundBlendMode: "normal",
+          backgroundSize: "cover, 180px 180px",
+          backgroundPosition: "center, 0 0",
+          backgroundRepeat: "no-repeat, repeat",
+          px: 2,
+          py: { xs: 3, md: 4 },
         }}
       >
-        <CircularProgress size={28} />
+        <Container maxWidth="md">
+          <Paper
+            elevation={6}
+            sx={{
+              bgcolor: fantaPalette.cardBg,
+              borderRadius: 4,
+              p: { xs: 3, sm: 4 },
+              border: `1px solid ${fantaPalette.cardBorder}`,
+              boxShadow: fantaPalette.cardShadow,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 180,
+            }}
+          >
+            <CircularProgress size={28} />
+          </Paper>
+        </Container>
       </Box>
     );
   }
@@ -80,24 +110,99 @@ export default function AdminPage() {
       <Box
         sx={{
           minHeight: "100vh",
-          bgcolor: "#020617",
-          color: "white",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          p: 2,
+          backgroundImage: `${fantaPalette.bgGradient}, ${fantaPalette.snowDots}`,
+          backgroundBlendMode: "normal",
+          backgroundSize: "cover, 180px 180px",
+          backgroundPosition: "center, 0 0",
+          backgroundRepeat: "no-repeat, repeat",
+          px: 2,
+          py: { xs: 3, md: 4 },
         }}
       >
-        <Typography>{errorMsg ?? "Si è verificato un errore."}</Typography>
+        <Container maxWidth="md">
+          <Paper
+            elevation={6}
+            sx={{
+              bgcolor: fantaPalette.cardBg,
+              borderRadius: 4,
+              p: { xs: 3, sm: 4 },
+              border: `1px solid ${fantaPalette.cardBorder}`,
+              boxShadow: fantaPalette.cardShadow,
+            }}
+          >
+            <Typography color="error">
+              {errorMsg ?? "Si è verificato un errore."}
+            </Typography>
+          </Paper>
+        </Container>
       </Box>
     );
   }
 
   return (
-    <AdminRegaliClient
-      currentAdminName={data.currentAdminName}
-      players={data.players}
-      categories={data.categories}
-    />
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundImage: `${fantaPalette.bgGradient}, ${fantaPalette.snowDots}`,
+        backgroundBlendMode: "normal",
+        backgroundSize: "cover, 180px 180px",
+        backgroundPosition: "center, 0 0",
+        backgroundRepeat: "no-repeat, repeat",
+        px: 2,
+        py: { xs: 3, md: 4 },
+      }}
+    >
+      <Container maxWidth="lg">
+        <Paper
+          elevation={6}
+          sx={{
+            bgcolor: fantaPalette.cardBg,
+            borderRadius: 4,
+            p: { xs: 3, sm: 4, md: 5 },
+            border: `1px solid ${fantaPalette.cardBorder}`,
+            boxShadow: fantaPalette.cardShadow,
+          }}
+        >
+          {/* Header area Admin */}
+          <Box sx={{ mb: 3 }}>
+            <Typography
+              variant="overline"
+              sx={{
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                color: fantaPalette.textMuted,
+              }}
+            >
+              Fanta Claus · Area Admin
+            </Typography>
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 700, color: fantaPalette.textPrimary }}
+            >
+              Ciao {data.currentAdminName}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ mt: 0.5, color: fantaPalette.textSecondary }}
+            >
+              Da qui gestisci i regali, le categorie e i dati del gioco.
+            </Typography>
+          </Box>
+
+          {/* Contenuto vero e proprio (gestione regali) */}
+          <AdminRegaliClient
+            currentAdminName={data.currentAdminName}
+            players={data.players}
+            categories={data.categories}
+          />
+        </Paper>
+      </Container>
+    </Box>
   );
 }

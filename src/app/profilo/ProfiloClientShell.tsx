@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Container,
@@ -8,26 +8,17 @@ import {
   Box,
   Alert,
   Button,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   Paper,
 } from "@mui/material";
 import TeamBuilder from "@/components/TeamBuilder";
+import type { Participant } from "@/data/participants";
 import { participants } from "@/data/participants";
-import { TEAM_LOCK_DEADLINE_ISO } from "@/config/gameConfig";
 import { supabase } from "@/lib/supabaseClient";
 import { fantaPalette } from "@/theme/fantaPalette";
-
-const deadline = new Date(TEAM_LOCK_DEADLINE_ISO);
-const deadlineLabel = deadline.toLocaleString("it-IT", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-type ProfiloClientShellProps = {
-  playerId: string;
-};
 
 // 🔹 Funzione di utilità per formattare il countdown in italiano
 function formatTimeLeft(ms: number): string {
@@ -54,6 +45,176 @@ function formatTimeLeft(ms: number): string {
   return `${parts.join(", ")} e ${last}`;
 }
 
+type VoteType = "best_wrapping" | "worst_wrapping" | "most_fitting";
+
+type VoteState = Record<VoteType, string | null>;
+
+const VOTE_LABELS: Record<VoteType, string> = {
+  best_wrapping: "Pacco meglio realizzato",
+  worst_wrapping: "Pacco peggio realizzato",
+  most_fitting: "Pacco più azzeccato",
+};
+
+type VotingPanelProps = {
+  playerId: string;
+  participants: Participant[];
+};
+
+function VotingPanel({ playerId, participants }: VotingPanelProps) {
+  const [votes, setVotes] = useState<VoteState>({
+    best_wrapping: null,
+    worst_wrapping: null,
+    most_fitting: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [savingType, setSavingType] = useState<VoteType | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const selectableParticipants = useMemo(
+    () => participants.filter((p) => p.id !== playerId),
+    [participants, playerId]
+  );
+
+  // Carica eventuali voti già espressi da questo giocatore
+  useEffect(() => {
+    const loadVotes = async () => {
+      setLoading(true);
+      setErrorMsg(null);
+      try {
+        const res = await fetch(`/api/votes?voter_owner_id=${playerId}`);
+        if (!res.ok) {
+          setErrorMsg("Errore nel caricamento dei tuoi voti.");
+          return;
+        }
+        const json = (await res.json()) as {
+          votes: { target_owner_id: string; vote_type: VoteType }[];
+        };
+
+        const next: VoteState = {
+          best_wrapping: null,
+          worst_wrapping: null,
+          most_fitting: null,
+        };
+
+        json.votes.forEach((v) => {
+          next[v.vote_type] = v.target_owner_id;
+        });
+
+        setVotes(next);
+      } catch (err) {
+        console.error("Errore rete caricamento voti", err);
+        setErrorMsg("Errore di rete nel caricamento dei tuoi voti.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadVotes();
+  }, [playerId]);
+
+  const handleChangeVote = async (voteType: VoteType, targetId: string) => {
+    setVotes((prev) => ({ ...prev, [voteType]: targetId || null }));
+    setSavingType(voteType);
+    setErrorMsg(null);
+
+    try {
+      const res = await fetch("/api/votes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voter_owner_id: playerId,
+          target_owner_id: targetId,
+          vote_type: voteType,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const msg = body?.error ?? "Errore nel salvataggio del voto.";
+        setErrorMsg(msg);
+      }
+    } catch (err) {
+      console.error("Errore rete salvataggio voto", err);
+      setErrorMsg("Errore di rete nel salvataggio del voto.");
+    } finally {
+      setSavingType(null);
+    }
+  };
+
+  return (
+    <Box sx={{ mt: 3, mb: 4 }}>
+      <Typography variant="h5" sx={{ mb: 1 }}>
+        Vota i pacchi 🎁
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={{ mb: 2, color: "rgba(75,85,99,0.9)" }}
+      >
+        Ora che le squadre sono chiuse, esprimi il tuo voto:
+        scegli il pacco meglio realizzato, quello peggio realizzato
+        e quello più azzeccato al destinatario. Non puoi votare te stesso.
+      </Typography>
+
+      {errorMsg && (
+        <Typography
+          variant="body2"
+          sx={{ mb: 2, color: "#f97373" }}
+        >
+          {errorMsg}
+        </Typography>
+      )}
+
+      {loading ? (
+        <Typography variant="body2">Caricamento voti...</Typography>
+      ) : (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
+            gap: 2,
+          }}
+        >
+          {(Object.keys(VOTE_LABELS) as VoteType[]).map((vt) => (
+            <FormControl
+              key={vt}
+              fullWidth
+              size="small"
+              sx={{ minWidth: 0 }}
+            >
+              <InputLabel id={`vote-${vt}`}>{VOTE_LABELS[vt]}</InputLabel>
+              <Select
+                labelId={`vote-${vt}`}
+                label={VOTE_LABELS[vt]}
+                value={votes[vt] ?? ""}
+                disabled={savingType === vt}
+                onChange={(e) =>
+                  handleChangeVote(
+                    vt,
+                    e.target.value as string
+                  )
+                }
+              >
+                <MenuItem value="">
+                  <em>Nessuno selezionato</em>
+                </MenuItem>
+                {selectableParticipants.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>
+                    {p.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+type ProfiloClientShellProps = {
+  playerId: string;
+};
+
 export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps) {
   const router = useRouter();
   const hasPlayerId = !!playerId;
@@ -62,15 +223,70 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
   const [loggingOut, setLoggingOut] = useState(false);
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
-  const [timeLeftMs, setTimeLeftMs] = useState<number>(() =>
-    Math.max(0, deadline.getTime() - Date.now())
+
+  // 🔹 Deadline gestita da DB (admin)
+  const [deadlineIso, setDeadlineIso] = useState<string | null>(null);
+  const [deadlineLoading, setDeadlineLoading] = useState(true);
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
+
+  const deadlineDate = useMemo(
+    () => (deadlineIso ? new Date(deadlineIso) : null),
+    [deadlineIso]
   );
 
+  const deadlineLabel = useMemo(() => {
+    if (!deadlineDate) return "non impostata";
+    return deadlineDate.toLocaleString("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, [deadlineDate]);
 
-  // 🔒 Gestione blocco + countdown
+  const [timeLeftMs, setTimeLeftMs] = useState<number>(0);
+
+  // 🔄 Carica deadline da /api/admin/team-deadline
   useEffect(() => {
+    const loadDeadline = async () => {
+      setDeadlineLoading(true);
+      setDeadlineError(null);
+      try {
+        const res = await fetch("/api/admin/team-deadline");
+        if (!res.ok) {
+          console.error(
+            "Errore lettura team-deadline",
+            await res.text()
+          );
+          setDeadlineError("Impossibile leggere la data limite.");
+          return;
+        }
+
+        const json = (await res.json()) as { deadlineIso: string | null };
+        setDeadlineIso(json.deadlineIso ?? null);
+      } catch (err) {
+        console.error("Errore rete team-deadline", err);
+        setDeadlineError("Errore di rete nel caricamento della data limite.");
+      } finally {
+        setDeadlineLoading(false);
+      }
+    };
+
+    loadDeadline();
+  }, []);
+
+  // 🔒 Gestione blocco + countdown in base alla deadline letta
+  useEffect(() => {
+    if (!deadlineDate) {
+      // Nessuna deadline impostata → mai bloccato, nessun timer
+      setIsLocked(false);
+      setTimeLeftMs(0);
+      return;
+    }
+
     const update = () => {
-      const diff = deadline.getTime() - Date.now();
+      const diff = deadlineDate.getTime() - Date.now();
       if (diff <= 0) {
         setIsLocked(true);
         setTimeLeftMs(0);
@@ -91,7 +307,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [deadlineDate]);
 
   // 👤 Carica nome e ruolo (admin) del giocatore da Supabase
   useEffect(() => {
@@ -291,7 +507,6 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
               >
                 {loggingOut ? "Uscita..." : "Esci"}
               </Button>
-
             </Box>
           </Box>
 
@@ -327,7 +542,61 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
               color: fantaPalette.timerTextLight,
             }}
           >
-            {isLocked ? (
+            {deadlineLoading ? (
+              <>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    mb: 1,
+                    color: "#ffffff",
+                  }}
+                >
+                  Caricamento data limite...
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Attendi un momento, stiamo recuperando il termine ultimo per
+                  modificare la squadra.
+                </Typography>
+              </>
+            ) : deadlineError ? (
+              <>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    mb: 1,
+                    color: "#ffffff",
+                  }}
+                >
+                  Errore nella data limite ⚠️
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  {deadlineError} Puoi comunque modificare la squadra al
+                  momento.
+                </Typography>
+              </>
+            ) : !deadlineDate ? (
+              <>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    mb: 1,
+                    color: "#ffffff",
+                  }}
+                >
+                  Nessuna data limite impostata 🎄
+                </Typography>
+
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Al momento non è stata impostata una scadenza per modificare
+                  la squadra. Puoi continuare a scegliere membri e capitano
+                  liberamente finché l&apos;organizzazione non definirà una
+                  data limite.
+                </Typography>
+              </>
+            ) : isLocked ? (
               <>
                 <Typography
                   variant="h6"
@@ -343,7 +612,8 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
                   Il periodo per modificare la squadra è terminato il{" "}
                   <strong>{deadlineLabel}</strong>. Ora puoi solo
-                  visualizzare i membri e il capitano scelti.
+                  visualizzare i membri e il capitano scelti, e partecipare
+                  alle votazioni.
                 </Typography>
               </>
             ) : (
@@ -377,12 +647,16 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
             )}
           </Box>
 
-          {/* Team builder */}
-          <TeamBuilder
-            participants={participants}
-            playerId={playerId}
-            isLocked={isLocked}
-          />
+          {/* Contenuto principale: TeamBuilder prima della scadenza, voti dopo */}
+          {deadlineDate && isLocked ? (
+            <VotingPanel playerId={playerId} participants={participants} />
+          ) : (
+            <TeamBuilder
+              participants={participants}
+              playerId={playerId}
+              isLocked={Boolean(deadlineDate && isLocked)}
+            />
+          )}
         </Paper>
       </Container>
     </Box>

@@ -1,3 +1,4 @@
+// src/app/api/leaderboard/route.ts
 import { NextResponse } from "next/server";
 import supabaseAdmin from "@/lib/supabaseAdmin";
 
@@ -20,6 +21,21 @@ type CategoryRow = {
   points: number;
 };
 
+type PlayerRow = {
+  owner_id: string;
+  name: string | null;
+};
+
+type VoteType = "best_wrapping" | "worst_wrapping" | "most_fitting";
+
+type VoteRow = {
+  voter_owner_id: string;
+  target_owner_id: string;
+  vote_type: string; // lo normalizziamo dopo
+};
+
+type VotePointsConfig = Record<VoteType, number>;
+
 type MemberScore = {
   id: string;
   name: string;
@@ -27,11 +43,62 @@ type MemberScore = {
   isCaptain: boolean;
 };
 
-type TeamScore = {
+type LeaderboardTeam = {
   ownerId: string;
   ownerName: string;
   totalPoints: number;
   members: MemberScore[];
+};
+
+type VotingWinner = {
+  ownerId: string;
+  ownerName: string;
+  votes: number;
+  pointsAwarded: number;
+};
+
+type LeaderboardVotingWinners = Record<
+  VoteType,
+  {
+    winners: VotingWinner[];
+  }
+>;
+
+type VoteDetailRow = {
+  voterOwnerId: string;
+  voterName: string;
+  targetOwnerId: string;
+  targetName: string;
+  pointsApplied: number;
+};
+
+type LeaderboardVotingDetails = Record<VoteType, VoteDetailRow[]>;
+
+type LeaderboardResponse = {
+  teams: LeaderboardTeam[];
+  voting?: LeaderboardVotingWinners;
+  votingDetails?: LeaderboardVotingDetails;
+};
+
+const DEFAULT_VOTE_POINTS: VotePointsConfig = {
+  best_wrapping: 0,
+  worst_wrapping: 0,
+  most_fitting: 0,
+};
+
+// normalizzazione robusta dei valori che arrivano da Supabase
+const NORMALIZED_VOTE_TYPE: Record<string, VoteType | undefined> = {
+  best_wrapping: "best_wrapping",
+  BEST_WRAPPING: "best_wrapping",
+  bestWrapping: "best_wrapping",
+
+  worst_wrapping: "worst_wrapping",
+  WORST_WRAPPING: "worst_wrapping",
+  worstWrapping: "worst_wrapping",
+
+  most_fitting: "most_fitting",
+  MOST_FITTING: "most_fitting",
+  mostFitting: "most_fitting",
 };
 
 export async function GET() {
@@ -61,6 +128,12 @@ export async function GET() {
     );
   }
 
+  // mappa id -> nome
+  const playerNameMap = new Map<string, string>();
+  (players as PlayerRow[]).forEach((p) => {
+    playerNameMap.set(p.owner_id, p.name ?? p.owner_id);
+  });
+
   // 3) Regali
   const { data: gifts, error: giftsError } = await supabaseAdmin
     .from("gifts")
@@ -87,18 +160,130 @@ export async function GET() {
     );
   }
 
-  // Mappe di appoggio
-  const playerNameMap = new Map<string, string>();
-  players.forEach((p) => {
-    playerNameMap.set(p.owner_id, p.name ?? p.owner_id);
-  });
+  // 5) Config punti votazioni
+  let votePointsConfig: VotePointsConfig = DEFAULT_VOTE_POINTS;
+  try {
+    const { data: voteSettings, error: voteSettingsError } =
+      await supabaseAdmin
+        .from("game_settings")
+        .select("value")
+        .eq("key", "vote_points")
+        .maybeSingle<{ value: Partial<VotePointsConfig> }>();
 
+    if (!voteSettingsError && voteSettings?.value) {
+      votePointsConfig = {
+        best_wrapping:
+          Number(voteSettings.value.best_wrapping ?? 0) || 0,
+        worst_wrapping:
+          Number(voteSettings.value.worst_wrapping ?? 0) || 0,
+        most_fitting:
+          Number(voteSettings.value.most_fitting ?? 0) || 0,
+      };
+    }
+  } catch (err) {
+    console.error("❌ Errore lettura game_settings.vote_points", err);
+  }
+
+  // 6) Voti (tabella CORRETTA: package_votes)
+  const { data: votes, error: votesError } = await supabaseAdmin
+    .from("package_votes")
+    .select("voter_owner_id, target_owner_id, vote_type");
+
+  let votingWinners: LeaderboardVotingWinners | undefined;
+  const votingBonusByPlayer = new Map<string, number>();
+  const votingDetails: LeaderboardVotingDetails = {
+    best_wrapping: [],
+    worst_wrapping: [],
+    most_fitting: [],
+  };
+
+  if (!votesError && votes) {
+    const voteRows = votes as VoteRow[];
+
+    // Conta i voti per tipo/target
+    const counts: Record<VoteType, Record<string, number>> = {
+      best_wrapping: {},
+      worst_wrapping: {},
+      most_fitting: {},
+    };
+
+    voteRows.forEach((v) => {
+      const normalized = NORMALIZED_VOTE_TYPE[v.vote_type];
+      if (!normalized) {
+        // tipo sconosciuto → lo ignoriamo
+        return;
+      }
+
+      const targetId = v.target_owner_id;
+      const voterId = v.voter_owner_id;
+
+      // conteggio per i vincitori
+      const current = counts[normalized][targetId] ?? 0;
+      counts[normalized][targetId] = current + 1;
+
+      // dettaglio voto singolo per admin
+      const perVotePoints = votePointsConfig[normalized];
+      votingDetails[normalized].push({
+        voterOwnerId: voterId,
+        voterName: playerNameMap.get(voterId) ?? voterId,
+        targetOwnerId: targetId,
+        targetName: playerNameMap.get(targetId) ?? targetId,
+        pointsApplied: perVotePoints,
+      });
+    });
+
+    const winnersResult: LeaderboardVotingWinners = {
+      best_wrapping: { winners: [] },
+      worst_wrapping: { winners: [] },
+      most_fitting: { winners: [] },
+    };
+
+    (["best_wrapping", "worst_wrapping", "most_fitting"] as VoteType[]).forEach(
+      (type) => {
+        const mapForType = counts[type];
+        const entries = Object.entries(mapForType);
+        if (entries.length === 0) {
+          return;
+        }
+
+        const maxVotes = entries.reduce(
+          (max, [, value]) => (value > max ? value : max),
+          0
+        );
+
+        const winnersForType = entries
+          .filter(([, value]) => value === maxVotes)
+          .map(([targetId, value]) => {
+            const pointsAwarded = votePointsConfig[type];
+
+            // bonus al giocatore vincitore
+            const prev = votingBonusByPlayer.get(targetId) ?? 0;
+            votingBonusByPlayer.set(targetId, prev + pointsAwarded);
+
+            return {
+              ownerId: targetId,
+              ownerName: playerNameMap.get(targetId) ?? targetId,
+              votes: value,
+              pointsAwarded,
+            };
+          });
+
+        winnersResult[type] = { winners: winnersForType };
+      }
+    );
+
+    votingWinners = winnersResult;
+  } else if (votesError) {
+    console.error("❌ Errore lettura package_votes", votesError);
+  }
+
+  // Mappe punti categorie
   const categoryPointsMap = new Map<string, number>();
   (categories as CategoryRow[]).forEach((c) => {
     categoryPointsMap.set(c.id, c.points);
   });
 
-  // Punti per ogni "santa" (chi fa il regalo)
+  // Punti per ogni "santa"
   const giftScoreBySanta = new Map<string, number>();
   (gifts as GiftRow[]).forEach((g) => {
     const base = categoryPointsMap.get(g.category_id) ?? 0;
@@ -106,18 +291,21 @@ export async function GET() {
     giftScoreBySanta.set(g.santa_owner_id, total);
   });
 
-  // Calcolo punteggio squadra
-  const leaderboard: TeamScore[] = (teams as TeamRow[])
-    .map<TeamScore | null>((t) => {
+  // Calcolo punteggio squadre
+  const leaderboard: LeaderboardTeam[] = (teams as TeamRow[])
+    .map<LeaderboardTeam | null>((t) => {
       const members = t.members ?? [];
       if (!Array.isArray(members) || members.length === 0) {
-        return null; // squadra vuota → la saltiamo
+        return null;
       }
 
       const captainId = t.captain_id ?? null;
 
       const membersDetailed: MemberScore[] = members.map((mid) => {
-        const basePts = giftScoreBySanta.get(mid) ?? 0;
+        const baseGift = giftScoreBySanta.get(mid) ?? 0;
+        const voteBonus = votingBonusByPlayer.get(mid) ?? 0;
+        const basePts = baseGift + voteBonus;
+
         const isCaptain = captainId === mid;
         const pts = isCaptain ? basePts * CAPTAIN_MULTIPLIER : basePts;
 
@@ -141,9 +329,14 @@ export async function GET() {
         members: membersDetailed,
       };
     })
-    // rimuove i null in modo tip-safe
-    .filter((team): team is TeamScore => team !== null)
+    .filter((t): t is LeaderboardTeam => t !== null)
     .sort((a, b) => b.totalPoints - a.totalPoints);
 
-  return NextResponse.json({ teams: leaderboard });
+  const response: LeaderboardResponse = {
+    teams: leaderboard,
+    voting: votingWinners,
+    votingDetails,
+  };
+
+  return NextResponse.json(response);
 }

@@ -205,6 +205,7 @@ export default function AdminRegaliClient({
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
   const [publishLoading, setPublishLoading] = useState(false);
+  const [unpublishLoading, setUnpublishLoading] = useState(false);
   const [isLeaderboardPublished, setIsLeaderboardPublished] = useState<
     boolean | null
   >(null);
@@ -699,6 +700,39 @@ export default function AdminRegaliClient({
     }
   };
 
+  const handleHideLeaderboard = async () => {
+    setUnpublishLoading(true);
+    try {
+        const res = await fetch("/api/admin/leaderboard-publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ published: false }),
+        });
+
+        if (!res.ok) {
+        let msg = "Errore nel nascondere la classifica.";
+        try {
+            const body = (await res.json()) as { error?: string };
+            if (body?.error) msg = body.error;
+        } catch {
+            // ignore
+        }
+        alert(msg);
+        return;
+        }
+
+        setIsLeaderboardPublished(false);
+        alert("Classifica nascosta ai giocatori.");
+    } catch (err) {
+        console.error("Errore hide classifica", err);
+        alert("Errore inatteso nel nascondere la classifica.");
+    } finally {
+        setUnpublishLoading(false);
+    }
+  };
+
+
+
   // 🔹 Reset squadre + voti speciali
   const handleResetGame = async () => {
     const conferma = window.confirm(
@@ -821,31 +855,44 @@ export default function AdminRegaliClient({
               }}
             >
               <Typography variant="h6">Classifica Fanta Claus</Typography>
-
               <Stack direction="row" spacing={1.5}>
                 <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={handleLoadLeaderboardPreview}
-                  disabled={leaderboardLoading}
-                  sx={{ textTransform: "none" }}
+                    size="small"
+                    variant="outlined"
+                    onClick={handleLoadLeaderboardPreview}
+                    disabled={leaderboardLoading}
+                    sx={{ textTransform: "none" }}
                 >
-                  {leaderboardLoading
+                    {leaderboardLoading
                     ? "Caricamento..."
                     : "Genera anteprima classifica"}
                 </Button>
+
                 <Button
-                  size="small"
-                  variant="contained"
-                  color="success"
-                  onClick={handlePublishLeaderboard}
-                  disabled={publishLoading}
-                  sx={{ textTransform: "none" }}
+                    size="small"
+                    variant="contained"
+                    color="success"
+                    onClick={handlePublishLeaderboard}
+                    disabled={publishLoading}
+                    sx={{ textTransform: "none" }}
                 >
-                  {publishLoading
+                    {publishLoading
                     ? "Pubblicazione..."
                     : "Pubblica / aggiorna classifica"}
                 </Button>
+
+                {isLeaderboardPublished && (
+                    <Button
+                    size="small"
+                    variant="outlined"
+                    color="warning"
+                    onClick={handleHideLeaderboard}
+                    disabled={unpublishLoading}
+                    sx={{ textTransform: "none" }}
+                    >
+                    {unpublishLoading ? "Nascondendo..." : "Nascondi classifica"}
+                    </Button>
+                )}
               </Stack>
             </Box>
 

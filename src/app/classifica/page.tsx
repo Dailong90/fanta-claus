@@ -54,6 +54,37 @@ export default function ClassificaPage() {
   const [awardsLoading, setAwardsLoading] = useState(true);
   const [awardsError, setAwardsError] = useState<string | null>(null);
 
+  // 👇 stato pubblicazione classifica
+  const [published, setPublished] = useState<boolean | null>(null);
+  const [publishedLoading, setPublishedLoading] = useState(true);
+
+  // Stato pubblicazione classifica
+  useEffect(() => {
+    const loadPublishStatus = async () => {
+      try {
+        setPublishedLoading(true);
+        const res = await fetch("/api/admin/leaderboard-publish");
+        if (!res.ok) {
+          console.error(
+            "Errore lettura stato pubblicazione classifica",
+            await res.text()
+          );
+          setPublished(false);
+          return;
+        }
+        const json = (await res.json()) as { published: boolean };
+        setPublished(json.published === true);
+      } catch (err) {
+        console.error("Errore rete stato pubblicazione classifica", err);
+        setPublished(false);
+      } finally {
+        setPublishedLoading(false);
+      }
+    };
+
+    loadPublishStatus();
+  }, []);
+
   // Classifica generale
   useEffect(() => {
     const load = async () => {
@@ -114,6 +145,85 @@ export default function ClassificaPage() {
       awards.worst_wrapping.length === 0 &&
       awards.most_fitting.length === 0);
 
+  // ⏳ Fase di caricamento stato pubblicazione
+  if (publishedLoading) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          px: 2,
+          backgroundImage: `${fantaPalette.bgGradient}, ${fantaPalette.snowDots}`,
+          backgroundBlendMode: "normal",
+          backgroundSize: "cover, 180px 180px",
+          backgroundPosition: "center, 0 0",
+          backgroundRepeat: "no-repeat, repeat",
+        }}
+      >
+        <CircularProgress size={32} />
+      </Box>
+    );
+  }
+
+  // ❌ Classifica NON pubblicata → messaggio e basta
+  if (!published) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          px: 2,
+          backgroundImage: `${fantaPalette.bgGradient}, ${fantaPalette.snowDots}`,
+          backgroundBlendMode: "normal",
+          backgroundSize: "cover, 180px 180px",
+          backgroundPosition: "center, 0 0",
+          backgroundRepeat: "no-repeat, repeat",
+        }}
+      >
+        <Container maxWidth="sm">
+          <Paper
+            sx={{
+              p: { xs: 3, sm: 4 },
+              borderRadius: 4,
+              bgcolor: fantaPalette.cardBg,
+              border: `1px solid ${fantaPalette.cardBorder}`,
+              boxShadow: fantaPalette.cardShadow,
+              textAlign: "center",
+            }}
+            elevation={6}
+          >
+            <Typography
+              variant="h5"
+              sx={{
+                mb: 1.5,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "#e11d48",
+              }}
+            >
+              Classifica non ancora disponibile
+            </Typography>
+            <Typography
+              variant="body1"
+              sx={{ color: fantaPalette.textSecondary }}
+            >
+              La classifica non è stata ancora pubblicata
+              dall&apos;organizzatore del Fanta Claus.
+              <br />
+              Torna a dare un&apos;occhiata più tardi! 🎅
+            </Typography>
+          </Paper>
+        </Container>
+      </Box>
+    );
+  }
+
+  // ✅ Classifica pubblicata → mostriamo tutto come prima
   return (
     <Box
       sx={{

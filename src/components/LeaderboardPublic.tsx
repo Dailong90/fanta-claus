@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Box,
   Typography,
@@ -146,7 +147,7 @@ export default function LeaderboardPublic({
                         <span>{index + 1}</span>
 
                         {index === 0 && (
-                            <img
+                            <Image
                             src="/icons/awards/gold.png"
                             alt="Gold"
                             width={26}
@@ -156,7 +157,7 @@ export default function LeaderboardPublic({
                         )}
 
                         {index === 1 && (
-                            <img
+                            <Image
                             src="/icons/awards/silver.png"
                             alt="Silver"
                             width={26}
@@ -166,7 +167,7 @@ export default function LeaderboardPublic({
                         )}
 
                         {index === 2 && (
-                            <img
+                            <Image
                             src="/icons/awards/bronze.png"
                             alt="Bronze"
                             width={26}

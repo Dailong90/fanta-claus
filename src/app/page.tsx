@@ -11,7 +11,7 @@ import {
   Stack,
 } from "@mui/material";
 import { fantaPalette } from "@/theme/fantaPalette";
-import LeaderboardPublic from "@/components/LeaderboardPublic";
+import PodiumPublic from "@/components/PodiumPublic";
 
 export default function HomePage() {
   const router = useRouter();
@@ -205,14 +205,10 @@ export default function HomePage() {
         </Paper>
       </Container>
 
-      {/* CARD CLASSIFICA: seconda card, solo dopo il termine */}
+      {/* CARD PODIO: seconda card, solo dopo il termine */}
       {!deadlineLoading && isAfterDeadline && (
         <Container maxWidth="md">
-          <LeaderboardPublic
-            title="Top 5 Fanta Claus"
-            limit={5}
-            variant="compact"
-          />
+          <PodiumPublic />
         </Container>
       )}
     </Box>

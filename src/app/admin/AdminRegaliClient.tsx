@@ -153,7 +153,6 @@ function formatDeadlineLabel(iso: string | null): string {
 }
 
 export default function AdminRegaliClient({
-  currentAdminName,
   players,
   categories,
 }: AdminRegaliClientProps) {

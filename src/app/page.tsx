@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -10,9 +11,41 @@ import {
   Stack,
 } from "@mui/material";
 import { fantaPalette } from "@/theme/fantaPalette";
+import LeaderboardPublic from "@/components/LeaderboardPublic";
 
 export default function HomePage() {
   const router = useRouter();
+
+  const [isAfterDeadline, setIsAfterDeadline] = useState(false);
+  const [deadlineLoading, setDeadlineLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDeadline = async () => {
+      try {
+        const res = await fetch("/api/admin/team-deadline");
+        if (!res.ok) {
+          console.error("Errore recupero deadline", await res.text());
+          return;
+        }
+
+        const data = (await res.json()) as { deadlineIso: string | null };
+
+        if (data.deadlineIso) {
+          const now = new Date();
+          const deadline = new Date(data.deadlineIso);
+          setIsAfterDeadline(now >= deadline);
+        } else {
+          setIsAfterDeadline(false);
+        }
+      } catch (err) {
+        console.error("Errore fetch deadline", err);
+      } finally {
+        setDeadlineLoading(false);
+      }
+    };
+
+    fetchDeadline();
+  }, []);
 
   const handleGoToLogin = () => {
     router.push("/login");
@@ -23,6 +56,7 @@ export default function HomePage() {
       sx={{
         minHeight: "100vh",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
 
@@ -34,8 +68,11 @@ export default function HomePage() {
         backgroundRepeat: "no-repeat, repeat",
 
         px: 2,
+        py: 4,
+        gap: 3,
       }}
     >
+      {/* CARD PRINCIPALE */}
       <Container maxWidth="md">
         <Paper
           elevation={6}
@@ -167,6 +204,17 @@ export default function HomePage() {
           </Stack>
         </Paper>
       </Container>
+
+      {/* CARD CLASSIFICA: seconda card, solo dopo il termine */}
+      {!deadlineLoading && isAfterDeadline && (
+        <Container maxWidth="md">
+          <LeaderboardPublic
+            title="Top 5 Fanta Claus"
+            limit={5}
+            variant="compact"
+          />
+        </Container>
+      )}
     </Box>
   );
 }

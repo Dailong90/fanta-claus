@@ -229,6 +229,11 @@ export default function AdminRegaliClient({
     [deadlineIso]
   );
 
+  // 🔹 Reset dati di gioco (squadre + voti)
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+
   // se il server aggiorna le categorie, aggiorno lo stato locale
   useEffect(() => {
     setCategoriesState(categories);
@@ -691,6 +696,52 @@ export default function AdminRegaliClient({
       alert("Errore inatteso nella pubblicazione della classifica.");
     } finally {
       setPublishLoading(false);
+    }
+  };
+
+  // 🔹 Reset squadre + voti speciali
+  const handleResetGame = async () => {
+    const conferma = window.confirm(
+      "Sei sicuro di voler pulire TUTTE le squadre e TUTTI i voti delle votazioni speciali?\n\nQuesta operazione non è reversibile."
+    );
+    if (!conferma) return;
+
+    try {
+      setResetLoading(true);
+      setResetMessage(null);
+      setResetError(null);
+
+      const res = await fetch("/api/admin/reset-game", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const msg =
+          data?.error ?? "Errore nel reset dei dati di gioco.";
+        setResetError(msg);
+        alert(msg);
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      const msg =
+        data?.message ??
+        "Reset completato: squadre e voti sono stati azzerati.";
+      setResetMessage(msg);
+      alert(msg);
+
+      // Pulizia stato locale per coerenza con il backend
+      setGiftMap({});
+      setLeaderboardPreview(null);
+      setLeaderboardVoting(null);
+      setLeaderboardVotesDetail([]);
+    } catch (err) {
+      console.error("Errore chiamata reset-game", err);
+      setResetError("Errore di rete durante il reset.");
+      alert("Errore di rete durante il reset.");
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -1199,6 +1250,62 @@ export default function AdminRegaliClient({
                   }
                 />
               </Box>
+            )}
+          </Paper>
+
+          {/* RESET DATI DI GIOCO (SQUADRE + VOTI) */}
+          <Paper
+            sx={{
+              p: 2.5,
+              bgcolor: "rgba(254,226,226,0.8)",
+              borderRadius: 3,
+              border: "1px solid rgba(248,113,113,0.9)",
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{ color: "#b91c1c", mb: 1 }}
+            >
+              Reset dati di gioco
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ color: "#7f1d1d", mb: 2 }}
+            >
+              Questa azione cancella tutte le squadre create finora e tutti i
+              voti delle votazioni speciali. I profili dei partecipanti e le
+              impostazioni generali (deadline, punti voti, ecc.) non vengono
+              toccati.
+            </Typography>
+
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleResetGame}
+              disabled={resetLoading}
+              sx={{ textTransform: "none", borderRadius: 999 }}
+            >
+              {resetLoading
+                ? "Pulizia in corso..."
+                : "Pulisci squadre e voti"}
+            </Button>
+
+            {resetMessage && (
+              <Typography
+                variant="body2"
+                sx={{ mt: 1.5, color: "#166534" }}
+              >
+                {resetMessage}
+              </Typography>
+            )}
+
+            {resetError && (
+              <Typography
+                variant="body2"
+                sx={{ mt: 1, color: "#b91c1c" }}
+              >
+                {resetError}
+              </Typography>
             )}
           </Paper>
 

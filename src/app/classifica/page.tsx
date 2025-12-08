@@ -34,10 +34,27 @@ type TeamScore = {
   members: MemberScore[];
 };
 
+type AwardWinner = {
+  ownerId: string;
+  ownerName: string;
+  votes: number;
+};
+
+type AwardsSummary = {
+  best_wrapping: AwardWinner[];
+  worst_wrapping: AwardWinner[];
+  most_fitting: AwardWinner[];
+};
+
 export default function ClassificaPage() {
   const [teams, setTeams] = useState<TeamScore[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [awards, setAwards] = useState<AwardsSummary | null>(null);
+  const [awardsLoading, setAwardsLoading] = useState(true);
+  const [awardsError, setAwardsError] = useState<string | null>(null);
+
+  // Classifica generale
   useEffect(() => {
     const load = async () => {
       try {
@@ -58,6 +75,44 @@ export default function ClassificaPage() {
 
     load();
   }, []);
+
+  // Premi speciali delle votazioni
+  useEffect(() => {
+    const loadAwards = async () => {
+      try {
+        setAwardsLoading(true);
+        setAwardsError(null);
+
+        const res = await fetch("/api/awards");
+        if (!res.ok) {
+          throw new Error("Errore nel recupero dei premi speciali");
+        }
+
+        const data = (await res.json()) as Partial<AwardsSummary>;
+
+        setAwards({
+          best_wrapping: data.best_wrapping ?? [],
+          worst_wrapping: data.worst_wrapping ?? [],
+          most_fitting: data.most_fitting ?? [],
+        });
+      } catch (err) {
+        console.error("Errore /api/awards", err);
+        setAwardsError(
+          err instanceof Error ? err.message : "Errore generico premi speciali"
+        );
+      } finally {
+        setAwardsLoading(false);
+      }
+    };
+
+    loadAwards();
+  }, []);
+
+  const noAwards =
+    !awards ||
+    (awards.best_wrapping.length === 0 &&
+      awards.worst_wrapping.length === 0 &&
+      awards.most_fitting.length === 0);
 
   return (
     <Box
@@ -201,6 +256,270 @@ export default function ClassificaPage() {
                   ))}
                 </TableBody>
               </Table>
+
+              {/* PREMI SPECIALI DELLE VOTAZIONI */}
+              <Box sx={{ mt: 4 }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    mb: 2,
+                    fontWeight: 600,
+                    color: fantaPalette.textPrimary,
+                  }}
+                >
+                  Premi speciali delle votazioni
+                </Typography>
+
+                {awardsLoading ? (
+                  <Box sx={{ textAlign: "center", py: 2 }}>
+                    <CircularProgress size={22} />
+                  </Box>
+                ) : awardsError ? (
+                  <Typography
+                    variant="body2"
+                    sx={{ color: "#b91c1c" }}
+                  >
+                    Errore nel caricamento dei premi speciali: {awardsError}
+                  </Typography>
+                ) : noAwards ? (
+                  <Typography
+                    variant="body2"
+                    sx={{ color: fantaPalette.textSecondary }}
+                  >
+                    Nessun voto registrato per i premi speciali.
+                  </Typography>
+                ) : (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: { xs: "column", sm: "row" },
+                      gap: 2,
+                    }}
+                  >
+                    {/* Pacco più bello */}
+                    <Paper
+                      sx={{
+                        flex: 1,
+                        p: 2,
+                        borderRadius: 3,
+                        bgcolor: "rgba(255,255,255,0.96)",
+                        border: `1px solid ${fantaPalette.cardBorder}`,
+                        boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+                      }}
+                      elevation={0}
+                    >
+                      <Typography
+                        variant="subtitle2"
+                        sx={{
+                          fontWeight: 700,
+                          color: fantaPalette.textPrimary,
+                        }}
+                      >
+                        Pacco meglio realizzato
+                      </Typography>
+
+                      {awards && awards.best_wrapping.length > 0 ? (
+                        <>
+                          {awards.best_wrapping.length > 1 && (
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                mt: 0.5,
+                                fontStyle: "italic",
+                                color: fantaPalette.textSecondary,
+                              }}
+                            >
+                              Ex aequo:
+                            </Typography>
+                          )}
+
+                          {awards.best_wrapping.map((w) => (
+                            <Typography
+                              key={w.ownerId}
+                              variant="body1"
+                              sx={{
+                                mt: 0.5,
+                                fontWeight: 600,
+                                color: fantaPalette.textPrimary,
+                              }}
+                            >
+                              {w.ownerName}
+                              <Typography
+                                component="span"
+                                variant="body2"
+                                sx={{
+                                  ml: 0.5,
+                                  color: fantaPalette.textSecondary,
+                                }}
+                              >
+                                – {w.votes} voti
+                              </Typography>
+                            </Typography>
+                          ))}
+                        </>
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            mt: 1,
+                            color: fantaPalette.textSecondary,
+                          }}
+                        >
+                          Nessun vincitore.
+                        </Typography>
+                      )}
+                    </Paper>
+
+                    {/* Pacco più brutto */}
+                    <Paper
+                      sx={{
+                        flex: 1,
+                        p: 2,
+                        borderRadius: 3,
+                        bgcolor: "rgba(255,255,255,0.96)",
+                        border: `1px solid ${fantaPalette.cardBorder}`,
+                        boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+                      }}
+                      elevation={0}
+                    >
+                      <Typography
+                        variant="subtitle2"
+                        sx={{
+                          fontWeight: 700,
+                          color: fantaPalette.textPrimary,
+                        }}
+                      >
+                        Pacco peggio realizzato
+                      </Typography>
+
+                      {awards && awards.worst_wrapping.length > 0 ? (
+                        <>
+                          {awards.worst_wrapping.length > 1 && (
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                mt: 0.5,
+                                fontStyle: "italic",
+                                color: fantaPalette.textSecondary,
+                              }}
+                            >
+                              Ex aequo:
+                            </Typography>
+                          )}
+
+                          {awards.worst_wrapping.map((w) => (
+                            <Typography
+                              key={w.ownerId}
+                              variant="body1"
+                              sx={{
+                                mt: 0.5,
+                                fontWeight: 600,
+                                color: fantaPalette.textPrimary,
+                              }}
+                            >
+                              {w.ownerName}
+                              <Typography
+                                component="span"
+                                variant="body2"
+                                sx={{
+                                  ml: 0.5,
+                                  color: fantaPalette.textSecondary,
+                                }}
+                              >
+                                – {w.votes} voti
+                              </Typography>
+                            </Typography>
+                          ))}
+                        </>
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            mt: 1,
+                            color: fantaPalette.textSecondary,
+                          }}
+                        >
+                          Nessun vincitore.
+                        </Typography>
+                      )}
+                    </Paper>
+
+                    {/* Regalo più azzeccato */}
+                    <Paper
+                      sx={{
+                        flex: 1,
+                        p: 2,
+                        borderRadius: 3,
+                        bgcolor: "rgba(255,255,255,0.96)",
+                        border: `1px solid ${fantaPalette.cardBorder}`,
+                        boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+                      }}
+                      elevation={0}
+                    >
+                      <Typography
+                        variant="subtitle2"
+                        sx={{
+                          fontWeight: 700,
+                          color: fantaPalette.textPrimary,
+                        }}
+                      >
+                        Regalo più azzeccato
+                      </Typography>
+
+                      {awards && awards.most_fitting.length > 0 ? (
+                        <>
+                          {awards.most_fitting.length > 1 && (
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                mt: 0.5,
+                                fontStyle: "italic",
+                                color: fantaPalette.textSecondary,
+                              }}
+                            >
+                              Ex aequo:
+                            </Typography>
+                          )}
+
+                          {awards.most_fitting.map((w) => (
+                            <Typography
+                              key={w.ownerId}
+                              variant="body1"
+                              sx={{
+                                mt: 0.5,
+                                fontWeight: 600,
+                                color: fantaPalette.textPrimary,
+                              }}
+                            >
+                              {w.ownerName}
+                              <Typography
+                                component="span"
+                                variant="body2"
+                                sx={{
+                                  ml: 0.5,
+                                  color: fantaPalette.textSecondary,
+                                }}
+                              >
+                                – {w.votes} voti
+                              </Typography>
+                            </Typography>
+                          ))}
+                        </>
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            mt: 1,
+                            color: fantaPalette.textSecondary,
+                          }}
+                        >
+                          Nessun vincitore.
+                        </Typography>
+                      )}
+                    </Paper>
+                  </Box>
+                )}
+              </Box>
 
               {/* DETTAGLIO MEMBRI SQUADRA */}
               <Box sx={{ mt: 3 }}>

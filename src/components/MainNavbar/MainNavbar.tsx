@@ -17,6 +17,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { fantaPalette } from "@/theme/fantaPalette";
+import Image from "next/image";
 
 type NavItem = {
   label: string;
@@ -32,7 +33,6 @@ export default function MainNavbar() {
   const handleToggleDrawer = () => setOpen((prev) => !prev);
 
   const handleLogout = () => {
-    // TODO: qui puoi pulire eventuale sessione (localStorage, ecc.)
     router.push("/login");
   };
 
@@ -40,7 +40,7 @@ export default function MainNavbar() {
     { label: "Home", href: "/" },
     { label: "Classifica", href: "/classifica" },
     { label: "Profilo", href: "/profilo" },
-    { label: "Admin", href: "/admin" }, // poi possiamo renderlo visibile solo agli admin
+    { label: "Admin", href: "/admin" },
   ];
 
   const logoutItem: NavItem = { label: "Esci", action: handleLogout };
@@ -50,16 +50,17 @@ export default function MainNavbar() {
   const isActive = (href?: string): boolean =>
     !!href && (pathname === href || pathname.startsWith(`${href}/`));
 
-    return (
+  return (
     <>
-      {/* HEADER SENZA APPBAR MUI */}
+      {/* HEADER */}
       <Box
         component="header"
         sx={{
-            position: "sticky",
-            top: 0,
-            zIndex: (theme) => theme.zIndex.appBar,
-            backgroundColor: "rgba(3, 123, 45, 0.1)",
+          position: "sticky",
+          top: 0,
+          zIndex: (theme) => theme.zIndex.appBar,
+          backgroundColor: "rgba(255,255,255,0.5)",
+          backdropFilter: "blur(6px)",
         }}
       >
         <Box
@@ -68,27 +69,28 @@ export default function MainNavbar() {
             width: "100%",
             mx: "auto",
             px: { xs: 2, sm: 3 },
-            py: 2,
+            py: 0.30,                    // meno margine verticale
+            minHeight: 50,               // navbar più compatta
             display: "flex",
             alignItems: "center",
           }}
         >
           {/* LOGO */}
           <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
-            <Typography
-              variant="h6"
-              component={Link}
-              href="/"
-              sx={{
-                fontWeight: 800,
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                textDecoration: "none",
-                color: "#f97316",
-              }}
-            >
-              Fanta Claus
-            </Typography>
+            <Link href="/" style={{ display: "flex", alignItems: "center" }}>
+              <Image
+                src="/logo/fantaclaus.png"
+                alt="Fanta Claus logo"
+                width={110}
+                height={110}
+                style={{
+                  width: "auto",
+                  height: 56,              // logo più grande
+                  objectFit: "contain",
+                }}
+                priority
+              />
+            </Link>
           </Box>
 
           {/* MENU DESKTOP */}
@@ -158,7 +160,7 @@ export default function MainNavbar() {
             onClick={handleToggleDrawer}
             sx={{
               display: { xs: "flex", md: "none" },
-              color: "#facc15", // dorato
+              color: "#facc15",
             }}
           >
             <MenuIcon />
@@ -210,5 +212,4 @@ export default function MainNavbar() {
       </Drawer>
     </>
   );
-
 }

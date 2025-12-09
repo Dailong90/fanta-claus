@@ -12,6 +12,8 @@ import {
 } from "@mui/material";
 import { fantaPalette } from "@/theme/fantaPalette";
 import PodiumPublic from "@/components/PodiumPublic";
+import Image from "next/image";
+
 
 export default function HomePage() {
   const router = useRouter();
@@ -84,29 +86,16 @@ export default function HomePage() {
             boxShadow: fantaPalette.cardShadow,
           }}
         >
-          <Stack spacing={3} alignItems="center">
-            {/* LOGO / TITOLO */}
-            <Box sx={{ textAlign: "center" }}>
-              <Typography
-                variant="h3"
-                component="h1"
-                sx={{
-                  fontWeight: "bold",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "#e11d48", // rosso acceso per il titolo
-                }}
-              >
-                Fanta Claus
-              </Typography>
-              <Typography
-                variant="subtitle1"
-                sx={{ mt: 1, color: fantaPalette.textSecondary }}
-              >
-                Il fantagioco segreto del Secret Santa aziendale 🎅
-              </Typography>
-            </Box>
-
+          <Stack spacing={1} alignItems="center">
+            <Image
+              src="/logo/fantaclaus.png"
+              alt="Fanta Claus"
+              width={240}
+              height={240}
+              style={{ width: "auto", height: 200 }}
+              priority
+            />
+            
             {/* DESCRIZIONE BREVE */}
             <Typography
               variant="body1"

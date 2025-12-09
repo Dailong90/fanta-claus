@@ -108,7 +108,6 @@ type LeaderboardVotingWinners = Record<
   }
 >;
 
-/** Riga di dettaglio per ogni voto singolo (ritorno dalla API) */
 type LeaderboardVoteDetail = {
   voterOwnerId: string;
   voterName: string;
@@ -195,7 +194,6 @@ export default function AdminRegaliClient({
   const [leaderboardVoting, setLeaderboardVoting] =
     useState<LeaderboardVotingWinners | null>(null);
 
-  /** dettaglio di tutti i voti (righe singole) */
   const [leaderboardVotesDetail, setLeaderboardVotesDetail] = useState<
     LeaderboardVoteDetail[]
   >([]);
@@ -703,35 +701,33 @@ export default function AdminRegaliClient({
   const handleHideLeaderboard = async () => {
     setUnpublishLoading(true);
     try {
-        const res = await fetch("/api/admin/leaderboard-publish", {
+      const res = await fetch("/api/admin/leaderboard-publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ published: false }),
-        });
+      });
 
-        if (!res.ok) {
+      if (!res.ok) {
         let msg = "Errore nel nascondere la classifica.";
         try {
-            const body = (await res.json()) as { error?: string };
-            if (body?.error) msg = body.error;
+          const body = (await res.json()) as { error?: string };
+          if (body?.error) msg = body.error;
         } catch {
-            // ignore
+          // ignore
         }
         alert(msg);
         return;
-        }
+      }
 
-        setIsLeaderboardPublished(false);
-        alert("Classifica nascosta ai giocatori.");
+      setIsLeaderboardPublished(false);
+      alert("Classifica nascosta ai giocatori.");
     } catch (err) {
-        console.error("Errore hide classifica", err);
-        alert("Errore inatteso nel nascondere la classifica.");
+      console.error("Errore hide classifica", err);
+      alert("Errore inatteso nel nascondere la classifica.");
     } finally {
-        setUnpublishLoading(false);
+      setUnpublishLoading(false);
     }
   };
-
-
 
   // 🔹 Reset squadre + voti speciali
   const handleResetGame = async () => {
@@ -796,7 +792,7 @@ export default function AdminRegaliClient({
         minHeight: "100vh",
         bgcolor: "background.default",
         color: "white",
-        py: 4,
+        py: { xs: 2, md: 4 },
       }}
     >
       <Container maxWidth="lg">
@@ -808,6 +804,7 @@ export default function AdminRegaliClient({
             justifyContent: "space-between",
             alignItems: { xs: "flex-start", sm: "center" },
             gap: 2,
+            flexWrap: "wrap",
           }}
         >
           <Button
@@ -838,7 +835,7 @@ export default function AdminRegaliClient({
           {/* GESTIONE CLASSIFICA */}
           <Paper
             sx={{
-              p: 2.5,
+              p: { xs: 2, sm: 2.5 },
               bgcolor: "background.paper",
               borderRadius: 3,
               border: "1px solid rgba(148,163,184,0.4)",
@@ -848,50 +845,64 @@ export default function AdminRegaliClient({
               sx={{
                 mb: 2,
                 display: "flex",
-                alignItems: "center",
+                alignItems: { xs: "flex-start", sm: "center" },
                 justifyContent: "space-between",
                 flexWrap: "wrap",
                 gap: 2,
+                flexDirection: { xs: "column", sm: "row" },
               }}
             >
               <Typography variant="h6">Classifica Fanta Claus</Typography>
-              <Stack direction="row" spacing={1.5}>
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1.5}
+                sx={{ width: { xs: "100%", md: "auto" } }}
+              >
                 <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={handleLoadLeaderboardPreview}
-                    disabled={leaderboardLoading}
-                    sx={{ textTransform: "none" }}
+                  size="small"
+                  variant="outlined"
+                  onClick={handleLoadLeaderboardPreview}
+                  disabled={leaderboardLoading}
+                  sx={{
+                    textTransform: "none",
+                    width: { xs: "100%", md: "auto" },
+                  }}
                 >
-                    {leaderboardLoading
+                  {leaderboardLoading
                     ? "Caricamento..."
                     : "Genera anteprima classifica"}
                 </Button>
 
                 <Button
-                    size="small"
-                    variant="contained"
-                    color="success"
-                    onClick={handlePublishLeaderboard}
-                    disabled={publishLoading}
-                    sx={{ textTransform: "none" }}
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  onClick={handlePublishLeaderboard}
+                  disabled={publishLoading}
+                  sx={{
+                    textTransform: "none",
+                    width: { xs: "100%", md: "auto" },
+                  }}
                 >
-                    {publishLoading
+                  {publishLoading
                     ? "Pubblicazione..."
                     : "Pubblica / aggiorna classifica"}
                 </Button>
 
                 {isLeaderboardPublished && (
-                    <Button
+                  <Button
                     size="small"
                     variant="outlined"
                     color="warning"
                     onClick={handleHideLeaderboard}
                     disabled={unpublishLoading}
-                    sx={{ textTransform: "none" }}
-                    >
+                    sx={{
+                      textTransform: "none",
+                      width: { xs: "100%", md: "auto" },
+                    }}
+                  >
                     {unpublishLoading ? "Nascondendo..." : "Nascondi classifica"}
-                    </Button>
+                  </Button>
                 )}
               </Stack>
             </Box>
@@ -911,136 +922,146 @@ export default function AdminRegaliClient({
 
             {leaderboardPreview && leaderboardPreview.length > 0 && (
               <>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
-                        Posizione
-                      </TableCell>
-                      <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
-                        Squadra
-                      </TableCell>
-                      <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
-                        Punti totali
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{ color: "rgba(148,163,184,1)" }}
-                      >
-                        Dettaglio
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {leaderboardPreview.map((team, index) => {
-                      const isExpanded = expandedTeamId === team.ownerId;
+                <Box sx={{ width: "100%", overflowX: "auto" }}>
+                  <Table
+                    size="small"
+                    sx={{ minWidth: 500 }}
+                  >
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                          Posizione
+                        </TableCell>
+                        <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                          Squadra
+                        </TableCell>
+                        <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                          Punti totali
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ color: "rgba(148,163,184,1)" }}
+                        >
+                          Dettaglio
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {leaderboardPreview.map((team, index) => {
+                        const isExpanded = expandedTeamId === team.ownerId;
 
-                      return (
-                        <React.Fragment key={team.ownerId}>
-                          {/* Riga principale */}
-                          <TableRow hover>
-                            <TableCell>{index + 1}</TableCell>
-                            <TableCell>{team.ownerName}</TableCell>
-                            <TableCell>{team.totalPoints}</TableCell>
-                            <TableCell align="right">
-                              <IconButton
-                                size="small"
-                                onClick={() =>
-                                  setExpandedTeamId(
-                                    isExpanded ? null : team.ownerId
-                                  )
-                                }
+                        return (
+                          <React.Fragment key={team.ownerId}>
+                            {/* Riga principale */}
+                            <TableRow hover>
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell>{team.ownerName}</TableCell>
+                              <TableCell>{team.totalPoints}</TableCell>
+                              <TableCell align="right">
+                                <IconButton
+                                  size="small"
+                                  onClick={() =>
+                                    setExpandedTeamId(
+                                      isExpanded ? null : team.ownerId
+                                    )
+                                  }
+                                >
+                                  {isExpanded ? (
+                                    <ExpandLessIcon fontSize="small" />
+                                  ) : (
+                                    <ExpandMoreIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+
+                            {/* Riga dettaglio squadra */}
+                            <TableRow>
+                              <TableCell
+                                colSpan={4}
+                                sx={{
+                                  py: 0,
+                                  bgcolor: "white",
+                                  color: "black",
+                                  borderTop: "1px solid rgba(0,0,0,0.1)",
+                                }}
                               >
-                                {isExpanded ? (
-                                  <ExpandLessIcon fontSize="small" />
-                                ) : (
-                                  <ExpandMoreIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
+                                <Collapse
+                                  in={isExpanded}
+                                  timeout="auto"
+                                  unmountOnExit
+                                >
+                                  <Box sx={{ py: 1.5, px: 2 }}>
+                                    <Typography
+                                      variant="subtitle2"
+                                      sx={{
+                                        mb: 1,
+                                        color: "rgba(51,65,85,0.9)",
+                                      }}
+                                    >
+                                      Componenti della squadra
+                                    </Typography>
 
-                          {/* Riga dettaglio squadra */}
-                          <TableRow>
-                            <TableCell
-                              colSpan={4}
-                              sx={{
-                                py: 0,
-                                bgcolor: "white",
-                                color: "black",
-                                borderTop: "1px solid rgba(0,0,0,0.1)",
-                              }}
-                            >
-                              <Collapse
-                                in={isExpanded}
-                                timeout="auto"
-                                unmountOnExit
-                              >
-                                <Box sx={{ py: 1.5, px: 2 }}>
-                                  <Typography
-                                    variant="subtitle2"
-                                    sx={{
-                                      mb: 1,
-                                      color: "rgba(51,65,85,0.9)",
-                                    }}
-                                  >
-                                    Componenti della squadra
-                                  </Typography>
-
-                                  <Table size="small" sx={{ bgcolor: "white" }}>
-                                    <TableHead>
-                                      <TableRow>
-                                        <TableCell
-                                          sx={{
-                                            color: "rgba(51,65,85,1)",
-                                          }}
-                                        >
-                                          Giocatore
-                                        </TableCell>
-                                        <TableCell
-                                          sx={{
-                                            color: "rgba(51,65,85,1)",
-                                          }}
-                                        >
-                                          Punti
-                                        </TableCell>
-                                        <TableCell
-                                          sx={{
-                                            color: "rgba(51,65,85,1)",
-                                          }}
-                                        >
-                                          Ruolo
-                                        </TableCell>
-                                      </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                      {team.members.map((m) => (
-                                        <TableRow key={m.id}>
-                                          <TableCell>{m.name}</TableCell>
-                                          <TableCell>{m.points}</TableCell>
-                                          <TableCell>
-                                            {m.isCaptain ? "Capitano" : "—"}
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </Box>
-                              </Collapse>
-                            </TableCell>
-                          </TableRow>
-                        </React.Fragment>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                                    <Box sx={{ width: "100%", overflowX: "auto" }}>
+                                      <Table
+                                        size="small"
+                                        sx={{ bgcolor: "white", minWidth: 400 }}
+                                      >
+                                        <TableHead>
+                                          <TableRow>
+                                            <TableCell
+                                              sx={{
+                                                color: "rgba(51,65,85,1)",
+                                              }}
+                                            >
+                                              Giocatore
+                                            </TableCell>
+                                            <TableCell
+                                              sx={{
+                                                color: "rgba(51,65,85,1)",
+                                              }}
+                                            >
+                                              Punti
+                                            </TableCell>
+                                            <TableCell
+                                              sx={{
+                                                color: "rgba(51,65,85,1)",
+                                              }}
+                                            >
+                                              Ruolo
+                                            </TableCell>
+                                          </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                          {team.members.map((m) => (
+                                            <TableRow key={m.id}>
+                                              <TableCell>{m.name}</TableCell>
+                                              <TableCell>{m.points}</TableCell>
+                                              <TableCell>
+                                                {m.isCaptain ? "Capitano" : "—"}
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+                                    </Box>
+                                  </Box>
+                                </Collapse>
+                              </TableCell>
+                            </TableRow>
+                          </React.Fragment>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </Box>
 
                 {/* RISULTATI VOTAZIONI + DETTAGLIO */}
                 {leaderboardVoting && (
                   <Paper
                     sx={{
                       mt: 3,
-                      p: 2,
+                      p: { xs: 2, sm: 2.5 },
                       bgcolor: "#ffffff",
                       borderRadius: 2,
                       border: "1px solid rgba(148,163,184,0.4)",
@@ -1110,35 +1131,37 @@ export default function AdminRegaliClient({
                           Dettaglio voti registrati
                         </Typography>
 
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell sx={{ fontWeight: 600 }}>
-                                Chi ha votato
-                              </TableCell>
-                              <TableCell sx={{ fontWeight: 600 }}>
-                                Ha votato per
-                              </TableCell>
-                              <TableCell sx={{ fontWeight: 600 }}>
-                                Tipo di voto
-                              </TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {leaderboardVotesDetail.map((v, idx) => (
-                              <TableRow
-                                key={`${v.voterOwnerId}-${v.targetOwnerId}-${idx}`}
-                              >
-                                <TableCell>{v.voterName}</TableCell>
-                                <TableCell>{v.targetName}</TableCell>
-                                <TableCell>
-                                  {VOTE_LABELS[v.voteType as VoteType] ??
-                                    v.voteType}
+                        <Box sx={{ width: "100%", overflowX: "auto" }}>
+                          <Table size="small" sx={{ minWidth: 500 }}>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell sx={{ fontWeight: 600 }}>
+                                  Chi ha votato
+                                </TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>
+                                  Ha votato per
+                                </TableCell>
+                                <TableCell sx={{ fontWeight: 600 }}>
+                                  Tipo di voto
                                 </TableCell>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                            </TableHead>
+                            <TableBody>
+                              {leaderboardVotesDetail.map((v, idx) => (
+                                <TableRow
+                                  key={`${v.voterOwnerId}-${v.targetOwnerId}-${idx}`}
+                                >
+                                  <TableCell>{v.voterName}</TableCell>
+                                  <TableCell>{v.targetName}</TableCell>
+                                  <TableCell>
+                                    {VOTE_LABELS[v.voteType as VoteType] ??
+                                      v.voteType}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </Box>
                       </>
                     )}
                   </Paper>
@@ -1150,7 +1173,7 @@ export default function AdminRegaliClient({
           {/* CONFIG SCADENZA SQUADRE */}
           <Paper
             sx={{
-              p: 2.5,
+              p: { xs: 2, sm: 2.5 },
               bgcolor: "background.paper",
               borderRadius: 3,
               border: "1px solid rgba(148,163,184,0.4)",
@@ -1160,10 +1183,11 @@ export default function AdminRegaliClient({
               sx={{
                 mb: 2,
                 display: "flex",
-                alignItems: "center",
+                alignItems: { xs: "flex-start", sm: "center" },
                 justifyContent: "space-between",
                 gap: 2,
                 flexWrap: "wrap",
+                flexDirection: { xs: "column", sm: "row" },
               }}
             >
               <Typography variant="h6">
@@ -1174,7 +1198,11 @@ export default function AdminRegaliClient({
                 variant="contained"
                 onClick={handleSaveDeadline}
                 disabled={deadlineSaving || deadlineLoading}
-                sx={{ textTransform: "none", borderRadius: 999 }}
+                sx={{
+                  textTransform: "none",
+                  borderRadius: 999,
+                  alignSelf: { xs: "stretch", sm: "auto" },
+                }}
               >
                 {deadlineSaving ? "Salvataggio..." : "Salva scadenza"}
               </Button>
@@ -1219,7 +1247,7 @@ export default function AdminRegaliClient({
           {/* CONFIG PUNTI VOTAZIONI */}
           <Paper
             sx={{
-              p: 2.5,
+              p: { xs: 2, sm: 2.5 },
               bgcolor: "background.paper",
               borderRadius: 3,
               border: "1px solid rgba(148,163,184,0.4)",
@@ -1229,9 +1257,11 @@ export default function AdminRegaliClient({
               sx={{
                 mb: 2,
                 display: "flex",
-                alignItems: "center",
+                alignItems: { xs: "flex-start", sm: "center" },
                 justifyContent: "space-between",
                 gap: 2,
+                flexDirection: { xs: "column", sm: "row" },
+                flexWrap: "wrap",
               }}
             >
               <Typography variant="h6">
@@ -1242,7 +1272,11 @@ export default function AdminRegaliClient({
                 variant="contained"
                 onClick={handleSaveVotePoints}
                 disabled={votePointsSaving || votePointsLoading}
-                sx={{ textTransform: "none", borderRadius: 999 }}
+                sx={{
+                  textTransform: "none",
+                  borderRadius: 999,
+                  alignSelf: { xs: "stretch", sm: "auto" },
+                }}
               >
                 {votePointsSaving ? "Salvataggio..." : "Salva punti voti"}
               </Button>
@@ -1303,22 +1337,16 @@ export default function AdminRegaliClient({
           {/* RESET DATI DI GIOCO (SQUADRE + VOTI) */}
           <Paper
             sx={{
-              p: 2.5,
+              p: { xs: 2, sm: 2.5 },
               bgcolor: "rgba(254,226,226,0.8)",
               borderRadius: 3,
               border: "1px solid rgba(248,113,113,0.9)",
             }}
           >
-            <Typography
-              variant="h6"
-              sx={{ color: "#b91c1c", mb: 1 }}
-            >
+            <Typography variant="h6" sx={{ color: "#b91c1c", mb: 1 }}>
               Reset dati di gioco
             </Typography>
-            <Typography
-              variant="body2"
-              sx={{ color: "#7f1d1d", mb: 2 }}
-            >
+            <Typography variant="body2" sx={{ color: "#7f1d1d", mb: 2 }}>
               Questa azione cancella tutte le squadre create finora e tutti i
               voti delle votazioni speciali. I profili dei partecipanti e le
               impostazioni generali (deadline, punti voti, ecc.) non vengono
@@ -1332,25 +1360,17 @@ export default function AdminRegaliClient({
               disabled={resetLoading}
               sx={{ textTransform: "none", borderRadius: 999 }}
             >
-              {resetLoading
-                ? "Pulizia in corso..."
-                : "Pulisci squadre e voti"}
+              {resetLoading ? "Pulizia in corso..." : "Pulisci squadre e voti"}
             </Button>
 
             {resetMessage && (
-              <Typography
-                variant="body2"
-                sx={{ mt: 1.5, color: "#166534" }}
-              >
+              <Typography variant="body2" sx={{ mt: 1.5, color: "#166534" }}>
                 {resetMessage}
               </Typography>
             )}
 
             {resetError && (
-              <Typography
-                variant="body2"
-                sx={{ mt: 1, color: "#b91c1c" }}
-              >
+              <Typography variant="body2" sx={{ mt: 1, color: "#b91c1c" }}>
                 {resetError}
               </Typography>
             )}
@@ -1359,7 +1379,7 @@ export default function AdminRegaliClient({
           {/* CATEGORIE REGALO E PUNTEGGI */}
           <Paper
             sx={{
-              p: 2.5,
+              p: { xs: 2, sm: 2.5 },
               bgcolor: "background.paper",
               borderRadius: 3,
               border: "1px solid rgba(148,163,184,0.4)",
@@ -1369,9 +1389,11 @@ export default function AdminRegaliClient({
               sx={{
                 mb: 2,
                 display: "flex",
-                alignItems: "center",
+                alignItems: { xs: "flex-start", sm: "center" },
                 justifyContent: "space-between",
                 gap: 2,
+                flexWrap: "wrap",
+                flexDirection: { xs: "column", sm: "row" },
               }}
             >
               <Typography variant="h6">
@@ -1385,6 +1407,7 @@ export default function AdminRegaliClient({
                 sx={{
                   textTransform: "none",
                   borderRadius: 999,
+                  alignSelf: { xs: "stretch", sm: "auto" },
                 }}
                 onClick={openCreateCategoryDialog}
               >
@@ -1392,74 +1415,76 @@ export default function AdminRegaliClient({
               </Button>
             </Box>
 
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
-                    Codice
-                  </TableCell>
-                  <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
-                    Nome
-                  </TableCell>
-                  <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
-                    Punti
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ color: "rgba(148,163,184,1)" }}
-                  >
-                    Azioni
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {categoriesState.map((cat) => (
-                  <TableRow key={cat.id} hover>
-                    <TableCell>
-                      <Chip
-                        label={cat.code}
-                        size="small"
-                        sx={{ fontWeight: 600 }}
-                      />
+            <Box sx={{ width: "100%", overflowX: "auto" }}>
+              <Table size="small" sx={{ minWidth: 500 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                      Codice
                     </TableCell>
-                    <TableCell>{cat.label}</TableCell>
-                    <TableCell>
-                      <Typography
-                        component="span"
-                        sx={{
-                          fontWeight: 600,
-                          color: cat.points >= 0 ? "#4ade80" : "#f97373",
-                        }}
-                      >
-                        {cat.points >= 0 ? `+${cat.points}` : cat.points}
-                      </Typography>
+                    <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                      Nome
                     </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => openEditCategoryDialog(cat)}
-                        sx={{ mr: 0.5 }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => setDeleteTarget(cat)}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                    <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
+                      Punti
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{ color: "rgba(148,163,184,1)" }}
+                    >
+                      Azioni
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {categoriesState.map((cat) => (
+                    <TableRow key={cat.id} hover>
+                      <TableCell>
+                        <Chip
+                          label={cat.code}
+                          size="small"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      </TableCell>
+                      <TableCell>{cat.label}</TableCell>
+                      <TableCell>
+                        <Typography
+                          component="span"
+                          sx={{
+                            fontWeight: 600,
+                            color: cat.points >= 0 ? "#4ade80" : "#f97373",
+                          }}
+                        >
+                          {cat.points >= 0 ? `+${cat.points}` : cat.points}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton
+                          size="small"
+                          onClick={() => openEditCategoryDialog(cat)}
+                          sx={{ mr: 0.5 }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => setDeleteTarget(cat)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
           </Paper>
 
           {/* Assegnazione regali per partecipante */}
           <Paper
             sx={{
-              p: 2.5,
+              p: { xs: 2, sm: 2.5 },
               bgcolor: "background.paper",
               borderRadius: 3,
               border: "1px solid rgba(148,163,184,0.4)",
@@ -1472,13 +1497,17 @@ export default function AdminRegaliClient({
                 justifyContent: "space-between",
                 flexWrap: "wrap",
                 gap: 2,
+                flexDirection: { xs: "column", sm: "row" },
               }}
             >
               <Typography variant="h6">
                 Assegna categoria di regalo ai partecipanti
               </Typography>
 
-              <FormControl size="small" sx={{ minWidth: 200 }}>
+              <FormControl
+                size="small"
+                sx={{ minWidth: { xs: "100%", sm: 200 } }}
+              >
                 <InputLabel id="filter-mode-label">Filtro</InputLabel>
                 <Select
                   labelId="filter-mode-label"
@@ -1508,126 +1537,130 @@ export default function AdminRegaliClient({
                 Nessun partecipante da mostrare con il filtro attuale.
               </Typography>
             ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
-                      Partecipante
-                    </TableCell>
-                    <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
-                      Categoria regalo
-                    </TableCell>
-                    <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
-                      Bonus / malus
-                    </TableCell>
-                    <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
-                      Stato
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredPlayers.map((p) => {
-                    const gift = giftMap[p.owner_id] ?? {
-                      category_id: "",
-                      bonus_points: 0,
-                    };
-                    const hasCategory = !!gift.category_id;
+              <Box sx={{ width: "100%", overflowX: "auto" }}>
+                <Table size="small" sx={{ minWidth: 650 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
+                        Partecipante
+                      </TableCell>
+                      <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
+                        Categoria regalo
+                      </TableCell>
+                      <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
+                        Bonus / malus
+                      </TableCell>
+                      <TableCell sx={{ color: "rgba(0, 156, 70, 1)" }}>
+                        Stato
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredPlayers.map((p) => {
+                      const gift = giftMap[p.owner_id] ?? {
+                        category_id: "",
+                        bonus_points: 0,
+                      };
+                      const hasCategory = !!gift.category_id;
 
-                    return (
-                      <TableRow
-                        key={p.owner_id}
-                        sx={{
-                          bgcolor: hasCategory
-                            ? "rgba(16, 152, 66, 0.08)"
-                            : "transparent",
-                        }}
-                      >
-                        <TableCell>
-                          <Box>
-                            <Typography>{p.name ?? "(senza nome)"}</Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{ color: "rgba(148,163,184,0.9)" }}
-                            >
-                              ID: {p.owner_id}
-                            </Typography>
-                          </Box>
-                        </TableCell>
+                      return (
+                        <TableRow
+                          key={p.owner_id}
+                          sx={{
+                            bgcolor: hasCategory
+                              ? "rgba(16, 152, 66, 0.08)"
+                              : "transparent",
+                          }}
+                        >
+                          <TableCell>
+                            <Box>
+                              <Typography>
+                                {p.name ?? "(senza nome)"}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ color: "rgba(148,163,184,0.9)" }}
+                              >
+                                ID: {p.owner_id}
+                              </Typography>
+                            </Box>
+                          </TableCell>
 
-                        <TableCell>
-                          <FormControl fullWidth size="small">
-                            <InputLabel id={`cat-label-${p.owner_id}`}>
-                              Categoria
-                            </InputLabel>
-                            <Select
-                              labelId={`cat-label-${p.owner_id}`}
-                              label="Categoria"
-                              value={gift.category_id}
-                              onChange={(e) =>
-                                handleChangeCategory(
-                                  p.owner_id,
-                                  e.target.value as string
-                                )
-                              }
-                            >
-                              <MenuItem value="">
-                                <em>Nessuna</em>
-                              </MenuItem>
-                              {categoriesState.map((cat) => (
-                                <MenuItem key={cat.id} value={cat.id}>
-                                  {cat.label} (
-                                  {cat.points >= 0
-                                    ? `+${cat.points}`
-                                    : cat.points}{" "}
-                                  pt)
+                          <TableCell>
+                            <FormControl fullWidth size="small">
+                              <InputLabel id={`cat-label-${p.owner_id}`}>
+                                Categoria
+                              </InputLabel>
+                              <Select
+                                labelId={`cat-label-${p.owner_id}`}
+                                label="Categoria"
+                                value={gift.category_id}
+                                onChange={(e) =>
+                                  handleChangeCategory(
+                                    p.owner_id,
+                                    e.target.value as string
+                                  )
+                                }
+                              >
+                                <MenuItem value="">
+                                  <em>Nessuna</em>
                                 </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </TableCell>
+                                {categoriesState.map((cat) => (
+                                  <MenuItem key={cat.id} value={cat.id}>
+                                    {cat.label} (
+                                    {cat.points >= 0
+                                      ? `+${cat.points}`
+                                      : cat.points}{" "}
+                                    pt)
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </TableCell>
 
-                        <TableCell sx={{ maxWidth: 120 }}>
-                          <TextField
-                            size="small"
-                            type="number"
-                            label="Bonus"
-                            value={gift.bonus_points}
-                            onChange={(e) =>
-                              handleChangeBonus(p.owner_id, e.target.value)
-                            }
-                            inputProps={{ style: { color: "white" } }}
-                          />
-                        </TableCell>
+                          <TableCell sx={{ maxWidth: 120 }}>
+                            <TextField
+                              size="small"
+                              type="number"
+                              label="Bonus"
+                              value={gift.bonus_points}
+                              onChange={(e) =>
+                                handleChangeBonus(p.owner_id, e.target.value)
+                              }
+                              inputProps={{ style: { color: "white" } }}
+                            />
+                          </TableCell>
 
-                        <TableCell>
-                          {savingFor === p.owner_id ? (
-                            <Typography
-                              variant="caption"
-                              sx={{ color: "rgba(0, 0, 0, 1)" }}
-                            >
-                              Salvataggio...
-                            </Typography>
-                          ) : hasCategory ? (
-                            <Typography
-                              variant="caption"
-                              sx={{ color: "rgba(52,211,153,1)" }}
-                            >
-                              Salvato
-                            </Typography>
-                          ) : (
-                            <Typography
-                              variant="caption"
-                              sx={{ color: "rgba(148,163,184,0.9)" }}
-                            >
-                              Nessuna categoria
-                            </Typography>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          <TableCell>
+                            {savingFor === p.owner_id ? (
+                              <Typography
+                                variant="caption"
+                                sx={{ color: "rgba(0, 0, 0, 1)" }}
+                              >
+                                Salvataggio...
+                              </Typography>
+                            ) : hasCategory ? (
+                              <Typography
+                                variant="caption"
+                                sx={{ color: "rgba(52,211,153,1)" }}
+                              >
+                                Salvato
+                              </Typography>
+                            ) : (
+                              <Typography
+                                variant="caption"
+                                sx={{ color: "rgba(148,163,184,0.9)" }}
+                              >
+                                Nessuna categoria
+                              </Typography>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </Box>
             )}
           </Paper>
         </Stack>

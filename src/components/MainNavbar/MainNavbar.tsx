@@ -36,16 +36,22 @@ export default function MainNavbar() {
     router.push("/login");
   };
 
+    // Voci base visibili a tutti
   const baseItems: NavItem[] = [
     { label: "Home", href: "/" },
     { label: "Classifica", href: "/classifica" },
     { label: "Profilo", href: "/profilo" },
-    { label: "Admin", href: "/admin" },
   ];
+
+  // Voce Admin: la mostriamo SOLO quando siamo già nell'area admin
+  if (pathname.startsWith("/admin")) {
+    baseItems.push({ label: "Admin", href: "/admin" });
+  }
 
   const logoutItem: NavItem = { label: "Esci", action: handleLogout };
 
   const navItems = [...baseItems, logoutItem];
+
 
   const isActive = (href?: string): boolean =>
     !!href && (pathname === href || pathname.startsWith(`${href}/`));
@@ -76,16 +82,16 @@ export default function MainNavbar() {
           }}
         >
           {/* LOGO */}
-          <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1, pl: { xs: 1.5, sm: 2, md: 0 } }}>
             <Link href="/" style={{ display: "flex", alignItems: "center" }}>
               <Image
                 src="/logo/fantaclaus.png"
                 alt="Fanta Claus logo"
-                width={110}
-                height={110}
+                width={120}
+                height={120}
                 style={{
                   width: "auto",
-                  height: 56,              // logo più grande
+                  height: 60,              // logo più grande
                   objectFit: "contain",
                 }}
                 priority
@@ -159,11 +165,13 @@ export default function MainNavbar() {
             edge="end"
             onClick={handleToggleDrawer}
             sx={{
-              display: { xs: "flex", md: "none" },
-              color: "#facc15",
+                display: { xs: "flex", md: "none" },
+                color: "#facc15",
+                mr: 1.5,            // margine destro maggiore
+                p: 1.2,             // area clic più grande
             }}
-          >
-            <MenuIcon />
+            >
+            <MenuIcon sx={{ fontSize: 34 }} />
           </IconButton>
         </Box>
       </Box>

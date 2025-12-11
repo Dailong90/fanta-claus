@@ -6,6 +6,7 @@ type PlayerRow = {
   owner_id: string;
   access_code: string;
   display_name: string | null;
+  is_admin: boolean;
 };
 
 // POST /api/login
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from("players")
-      .select("owner_id, display_name")
+      .select("owner_id, display_name, is_admin")
       .eq("access_code", code)
       .maybeSingle<PlayerRow>();
 
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       playerId: data.owner_id,
       name: data.display_name ?? data.owner_id,
+      isAdmin: !!data.is_admin,
     });
 
     res.cookies.set(sessionCookie);

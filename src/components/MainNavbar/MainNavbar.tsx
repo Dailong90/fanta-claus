@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -25,36 +25,92 @@ type NavItem = {
   action?: () => void;
 };
 
+type AuthState = {
+  isLoggedIn: boolean;
+  isAdmin: boolean;
+};
+
+// 🔹 Legge lo stato auth da localStorage (solo lato client)
+function readAuthState(): AuthState {
+  if (typeof window === "undefined") {
+    return { isLoggedIn: false, isAdmin: false };
+  }
+
+  const ownerId = window.localStorage.getItem("fanta_owner_id");
+  const adminFlag = window.localStorage.getItem("fanta_is_admin");
+
+  return {
+    isLoggedIn: !!ownerId,
+    isAdmin: adminFlag === "true",
+  };
+}
+
 export default function MainNavbar() {
   const [open, setOpen] = useState(false);
+  const [auth, setAuth] = useState<AuthState>(() => readAuthState());
+
   const pathname = usePathname();
   const router = useRouter();
 
   const handleToggleDrawer = () => setOpen((prev) => !prev);
 
   const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("fanta_owner_id");
+      window.localStorage.removeItem("fanta_is_admin");
+      // 🔔 Notifica a tutta l'app che l'auth è cambiata
+      window.dispatchEvent(new Event("fanta-auth-change"));
+    }
     router.push("/login");
+    router.refresh();
   };
 
-    // Voci base visibili a tutti
-  const baseItems: NavItem[] = [
-    { label: "Home", href: "/" },
-    { label: "Classifica", href: "/classifica" },
-    { label: "Profilo", href: "/profilo" },
-  ];
+  // 🔔 Ascolta cambiamenti di auth (logout/login/altre tab)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  // Voce Admin: la mostriamo SOLO quando siamo già nell'area admin
-  if (pathname.startsWith("/admin")) {
-    baseItems.push({ label: "Admin", href: "/admin" });
-  }
+    const handleStorage = (e: StorageEvent) => {
+      if (
+        e.key === "fanta_owner_id" ||
+        e.key === "fanta_is_admin" ||
+        e.key === null // clear()
+      ) {
+        setAuth(readAuthState());
+      }
+    };
 
-  const logoutItem: NavItem = { label: "Esci", action: handleLogout };
+    const handleAuthCustomEvent = () => {
+      setAuth(readAuthState());
+    };
 
-  const navItems = [...baseItems, logoutItem];
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("fanta-auth-change", handleAuthCustomEvent);
 
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("fanta-auth-change", handleAuthCustomEvent);
+    };
+  }, []);
 
   const isActive = (href?: string): boolean =>
     !!href && (pathname === href || pathname.startsWith(`${href}/`));
+
+  // 🔹 Voci base
+  const navItems: NavItem[] = [{ label: "Home", href: "/" }];
+
+  // 🔹 Aggiungo voci solo se loggato
+  if (auth.isLoggedIn) {
+    navItems.push(
+      { label: "Classifica", href: "/classifica" },
+      { label: "Profilo", href: "/profilo" }
+    );
+
+    if (auth.isAdmin) {
+      navItems.push({ label: "Admin", href: "/admin" });
+    }
+
+    navItems.push({ label: "Esci", action: handleLogout });
+  }
 
   return (
     <>
@@ -65,8 +121,7 @@ export default function MainNavbar() {
           position: "sticky",
           top: 0,
           zIndex: (theme) => theme.zIndex.appBar,
-          backgroundColor: "rgba(255,255,255,0.5)",
-          backdropFilter: "blur(6px)",
+          backgroundColor: "rgba(3, 123, 45, 0.1)",
         }}
       >
         <Box
@@ -75,24 +130,22 @@ export default function MainNavbar() {
             width: "100%",
             mx: "auto",
             px: { xs: 2, sm: 3 },
-            py: 0.30,                    // meno margine verticale
-            minHeight: 50,               // navbar più compatta
+            py: 1.5,
             display: "flex",
             alignItems: "center",
           }}
         >
           {/* LOGO */}
-          <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1, pl: { xs: 1.5, sm: 2, md: 0 } }}>
+          <Box sx={{ display: "flex", alignItems: "center", flexGrow: 1 }}>
             <Link href="/" style={{ display: "flex", alignItems: "center" }}>
               <Image
                 src="/logo/fantaclaus.png"
                 alt="Fanta Claus logo"
-                width={120}
-                height={120}
+                width={80}
+                height={80}
                 style={{
                   width: "auto",
-                  height: 60,              // logo più grande
-                  objectFit: "contain",
+                  height: 52,
                 }}
                 priority
               />
@@ -165,13 +218,11 @@ export default function MainNavbar() {
             edge="end"
             onClick={handleToggleDrawer}
             sx={{
-                display: { xs: "flex", md: "none" },
-                color: "#facc15",
-                mr: 1.5,            // margine destro maggiore
-                p: 1.2,             // area clic più grande
+              display: { xs: "flex", md: "none" },
+              color: "#facc15",
             }}
-            >
-            <MenuIcon sx={{ fontSize: 34 }} />
+          >
+            <MenuIcon />
           </IconButton>
         </Box>
       </Box>

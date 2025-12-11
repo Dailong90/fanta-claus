@@ -22,7 +22,9 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim() || loading) return;
+    const trimmed = code.trim();
+
+    if (!trimmed || loading) return;
 
     setErrorMsg(null);
     setLoading(true);
@@ -33,21 +35,34 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: trimmed }),
       });
 
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
         setErrorMsg(data?.error ?? "Errore interno, riprova tra poco.");
-        setLoading(false);
         return;
       }
 
+      // 🧠 Salva stato login per la navbar
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("fanta_owner_id", data.playerId);
+        window.localStorage.setItem(
+          "fanta_is_admin",
+          data.isAdmin ? "true" : "false"
+        );
+        // 🔔 Notifica alla navbar che l'auth è cambiata
+        window.dispatchEvent(new Event("fanta-auth-change"));
+      }
+
+      // Vai al profilo
       router.push("/profilo");
+      router.refresh();
     } catch (err) {
       console.error("Errore login", err);
       setErrorMsg("Errore di rete, riprova tra poco.");
+    } finally {
       setLoading(false);
     }
   };

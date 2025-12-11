@@ -14,39 +14,35 @@ import { fantaPalette } from "@/theme/fantaPalette";
 import PodiumPublic from "@/components/PodiumPublic";
 import Image from "next/image";
 
-
 export default function HomePage() {
   const router = useRouter();
 
-  const [isAfterDeadline, setIsAfterDeadline] = useState(false);
-  const [deadlineLoading, setDeadlineLoading] = useState(true);
+  // 👇 Mostrare o meno il podio in base alla presenza della classifica
+  const [showPodium, setShowPodium] = useState(false);
+  const [podiumLoading, setPodiumLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDeadline = async () => {
+    const checkLeaderboard = async () => {
       try {
-        const res = await fetch("/api/admin/team-deadline");
+        const res = await fetch("/api/leaderboard");
         if (!res.ok) {
-          console.error("Errore recupero deadline", await res.text());
+          console.error("Errore recupero leaderboard", await res.text());
+          setShowPodium(false);
           return;
         }
 
-        const data = (await res.json()) as { deadlineIso: string | null };
-
-        if (data.deadlineIso) {
-          const now = new Date();
-          const deadline = new Date(data.deadlineIso);
-          setIsAfterDeadline(now >= deadline);
-        } else {
-          setIsAfterDeadline(false);
-        }
+        const data = await res.json();
+        const teams = Array.isArray(data?.teams) ? data.teams : [];
+        setShowPodium(teams.length > 0);
       } catch (err) {
-        console.error("Errore fetch deadline", err);
+        console.error("Errore fetch leaderboard", err);
+        setShowPodium(false);
       } finally {
-        setDeadlineLoading(false);
+        setPodiumLoading(false);
       }
     };
 
-    fetchDeadline();
+    checkLeaderboard();
   }, []);
 
   const handleGoToLogin = () => {
@@ -95,7 +91,7 @@ export default function HomePage() {
               style={{ width: "auto", height: 200 }}
               priority
             />
-            
+
             {/* DESCRIZIONE BREVE */}
             <Typography
               variant="body1"
@@ -104,9 +100,9 @@ export default function HomePage() {
                 color: fantaPalette.textPrimary,
               }}
             >
-              Ognuno ha pescato un collega a cui fare il regalo.
-              Con il Fanta Claus scegli la tua squadra di colleghi
-              e fai punti in base ai regali che hanno fatto loro.
+              Per il Secret Santa ognuno ha pescato un collega a cui fare il
+              regalo. Forma la tua squadra di colleghi e fai punti in base ai
+              regali che riceveranno!
             </Typography>
 
             {/* REGOLE BASE */}
@@ -116,11 +112,11 @@ export default function HomePage() {
                 sx={{
                   mb: 1.5,
                   textAlign: "center",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   color: fantaPalette.textPrimary,
                 }}
               >
-                Regole in breve
+                Regole
               </Typography>
 
               <Stack
@@ -135,20 +131,34 @@ export default function HomePage() {
                   <strong>squadra di 7 colleghi</strong>.
                 </Typography>
                 <Typography>
-                  • Puoi scegliere solo tra i partecipanti al Secret Santa.
+                  • Nomina un <strong>capitano</strong> ti fara guadagnare
+                  punti doppi. Attento, vale anche per i malus!
                 </Typography>
                 <Typography>
-                  • Ogni collega in squadra fa punti in base al{" "}
-                  <strong>tipo di regalo</strong> che ha fatto.
+                  • Hai tempo fino al{" "}
+                  <strong>15 dicembre alle 13:00</strong> per modificare la
+                  squadra.
                 </Typography>
                 <Typography>
-                  • Puoi nominare un <strong>capitano</strong> (in futuro
-                  potrebbe valere punti extra 😉).
+                  • Ogni componente della squadra guadagna punti in base al{" "}
+                  <strong>tipo di regalo</strong> che riceve.
                 </Typography>
                 <Typography>
-                  • Hai tempo fino alla{" "}
-                  <strong>scadenza indicata nel tuo profilo</strong> per
-                  modificare la squadra.
+                  • I punti assegnati per le tipologie dei regali verranno
+                  comunicati il <strong>15 dicembre alle 14:00</strong>.
+                </Typography>
+                <Typography>
+                  • Dopo l&apos;apertura dei pacchi torna sul tuo profilo per
+                  votare le tre categorie: pacco meglio realizzato, pacco peggio
+                  realizzato e regalo più azzeccato.{" "}
+                  <strong>
+                    I punti verranno assegnati sempre a chi riceve il pacco!
+                  </strong>
+                  .
+                </Typography>
+                <Typography>
+                  • La classifica per scoprire il vincitore verrà pubblicata il{" "}
+                  <strong>16 dicembre alle 15:00</strong>.
                 </Typography>
               </Stack>
             </Box>
@@ -194,8 +204,8 @@ export default function HomePage() {
         </Paper>
       </Container>
 
-      {/* CARD PODIO: seconda card, solo dopo il termine */}
-      {!deadlineLoading && isAfterDeadline && (
+      {/* CARD PODIO: seconda card, visibile solo se esiste una classifica */}
+      {!podiumLoading && showPodium && (
         <Container maxWidth="md">
           <PodiumPublic />
         </Container>

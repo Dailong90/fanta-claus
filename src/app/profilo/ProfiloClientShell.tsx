@@ -13,6 +13,11 @@ import {
   Select,
   MenuItem,
   Paper,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
 } from "@mui/material";
 import TeamBuilder from "@/components/TeamBuilder";
 import type { Participant } from "@/data/participants";
@@ -31,16 +36,27 @@ function formatTimeLeft(ms: number): string {
   const seconds = totalSeconds % 60;
 
   const parts: string[] = [];
-  if (days > 0) parts.push(`${days} giorno${days === 1 ? "" : "i"}`);
-  if (hours > 0) parts.push(`${hours} ora${hours === 1 ? "" : "e"}`);
-  if (minutes > 0) parts.push(`${minutes} minuto${minutes === 1 ? "" : "i"}`);
+
+  if (days > 0) {
+    parts.push(`${days} ${days === 1 ? "giorno" : "giorni"}`);
+  }
+
+  if (hours > 0) {
+    parts.push(`${hours} ${hours === 1 ? "ora" : "ore"}`);
+  }
+
+  if (minutes > 0) {
+    parts.push(`${minutes} ${minutes === 1 ? "minuto" : "minuti"}`);
+  }
+
+  // Mostro i secondi solo se non ci sono i giorni
   if (seconds > 0 && days === 0) {
-    parts.push(`${seconds} secondo${seconds === 1 ? "" : "i"}`);
+    parts.push(`${seconds} ${seconds === 1 ? "secondo" : "secondi"}`);
   }
 
   if (parts.length === 0) return "meno di 1 secondo";
-
   if (parts.length === 1) return parts[0];
+
   const last = parts.pop();
   return `${parts.join(", ")} e ${last}`;
 }
@@ -50,9 +66,9 @@ type VoteType = "best_wrapping" | "worst_wrapping" | "most_fitting";
 type VoteState = Record<VoteType, string | null>;
 
 const VOTE_LABELS: Record<VoteType, string> = {
-  best_wrapping: "Pacco meglio realizzato",
-  worst_wrapping: "Pacco peggio realizzato",
-  most_fitting: "Pacco più azzeccato",
+  best_wrapping: "Pacco meglio realizzato +3",
+  worst_wrapping: "Pacco peggio realizzato -3",
+  most_fitting: "Pacco più azzeccato +5",
 };
 
 type VotingPanelProps = {
@@ -144,7 +160,7 @@ function VotingPanel({ playerId, participants }: VotingPanelProps) {
   return (
     <Box sx={{ mt: 3, mb: 4 }}>
       <Typography variant="h5" sx={{ mb: 1 }}>
-        Vota i pacchi 🎁
+        Vota i pacchi!
       </Typography>
       <Typography
         variant="body2"
@@ -152,7 +168,7 @@ function VotingPanel({ playerId, participants }: VotingPanelProps) {
       >
         Ora che le squadre sono chiuse, esprimi il tuo voto:
         scegli il pacco meglio realizzato, quello peggio realizzato
-        e quello più azzeccato al destinatario. Non puoi votare te stesso.
+        e il reaglo più azzeccato al destinatario. La persona più votata di ognuna delle tre categorie guadagnerà i punti indicati. Non puoi votare te stesso.
       </Typography>
 
       {errorMsg && (
@@ -215,6 +231,21 @@ type ProfiloClientShellProps = {
   playerId: string;
 };
 
+// tipi che rispecchiano /api/leaderboard
+type MemberScore = {
+  id: string;
+  name: string;
+  points: number;
+  isCaptain: boolean;
+};
+
+type TeamScoreRow = {
+  ownerId: string;
+  ownerName: string;
+  totalPoints: number;
+  members: MemberScore[];
+};
+
 export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps) {
   const router = useRouter();
   const hasPlayerId = !!playerId;
@@ -223,6 +254,24 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
   const [loggingOut, setLoggingOut] = useState(false);
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
+  // stato per il bottone "Salva squadra"
+  const [canSave, setCanSave] = useState(false);
+  const [showSavedAlert, setShowSavedAlert] = useState(false);
+
+  // 🔹 riepilogo squadra quando il periodo è scaduto
+  const [teamSummary, setTeamSummary] = useState<{
+    members: Participant[];
+    captainId: string | null;
+  } | null>(null);
+  const [teamLoading, setTeamLoading] = useState(false);
+
+  // 🔹 punteggi dalla classifica (team ownerId -> dati squadra)
+  const [leaderboardMap, setLeaderboardMap] = useState<
+    Record<string, TeamScoreRow>
+  >({});
+  const [scoresLoading, setScoresLoading] = useState(false);
+  const [scoresError, setScoresError] = useState<string | null>(null);
 
   // 🔹 Deadline gestita da DB (admin)
   const [deadlineIso, setDeadlineIso] = useState<string | null>(null);
@@ -342,6 +391,110 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
     };
   }, [playerId]);
 
+  // 📋 Carica la squadra per il riepilogo (usata quando isLocked = true)
+  useEffect(() => {
+    if (!playerId) return;
+
+    const loadTeamSummary = async () => {
+      setTeamLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("teams")
+          .select("members, captain_id")
+          .eq("owner_id", playerId)
+          .maybeSingle<{ members: string[]; captain_id: string | null }>();
+
+        if (error) {
+          console.error("❌ Errore caricamento squadra per riepilogo", error);
+          setTeamSummary(null);
+          return;
+        }
+
+        if (!data) {
+          setTeamSummary(null);
+          return;
+        }
+
+        const memberIds = data.members ?? [];
+        const memberObjects = participants.filter((p) =>
+          memberIds.includes(p.id)
+        );
+
+        setTeamSummary({
+          members: memberObjects,
+          captainId: data.captain_id,
+        });
+      } finally {
+        setTeamLoading(false);
+      }
+    };
+
+    loadTeamSummary();
+  }, [playerId]);
+
+  // 🔢 Carica punteggi dalla leaderboard quando il periodo è scaduto
+  useEffect(() => {
+    if (!isLocked) return; // finché non è scaduto non serve
+
+    const loadScores = async () => {
+      setScoresLoading(true);
+      setScoresError(null);
+      try {
+        const res = await fetch("/api/leaderboard");
+        if (!res.ok) {
+          console.error("Errore lettura leaderboard", await res.text());
+          setScoresError(
+            "Impossibile caricare i punteggi della classifica."
+          );
+          return;
+        }
+
+        const json = (await res.json()) as { teams?: TeamScoreRow[] };
+        const rows = Array.isArray(json.teams) ? json.teams : [];
+
+        const map: Record<string, TeamScoreRow> = {};
+        rows.forEach((row) => {
+          map[row.ownerId] = row;
+        });
+
+        setLeaderboardMap(map);
+      } catch (err) {
+        console.error("Errore rete leaderboard", err);
+        setScoresError("Errore di rete nel caricamento dei punteggi.");
+      } finally {
+        setScoresLoading(false);
+      }
+    };
+
+    loadScores();
+  }, [isLocked]);
+
+  // callback che riceve lo stato della squadra dal TeamBuilder
+  const handleTeamStateChange = (state: {
+    selectedCount: number;
+    isComplete: boolean;
+    hasCaptain: boolean;
+  }) => {
+    if (isLocked) {
+      setCanSave(false);
+      return;
+    }
+    setCanSave(state.isComplete && state.hasCaptain);
+  };
+
+  // 🚀 click su "Salva squadra" → solo feedback visivo
+  const handleSave = () => {
+    if (!canSave) return;
+    setShowSavedAlert(true);
+  };
+
+  // nasconde l'alert dopo qualche secondo
+  useEffect(() => {
+    if (!showSavedAlert) return;
+    const t = setTimeout(() => setShowSavedAlert(false), 3500);
+    return () => clearTimeout(t);
+  }, [showSavedAlert]);
+
   // 🚪 Logout
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -352,10 +505,22 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
       console.error("❌ Errore logout", err);
     }
 
+    // 🔥 Ripulisce il localStorage e notifica la navbar
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("fanta_owner_id");
+      window.localStorage.removeItem("fanta_is_admin");
+      window.dispatchEvent(new Event("fanta-auth-change"));
+    }
+
     setLoggingOut(false);
+
+    // 🔄 Redirect + refresh
     router.push("/login");
     router.refresh();
   };
+
+  // riga della leaderboard relativa a questo giocatore (owner della squadra)
+  const myLeaderboardRow = leaderboardMap[playerId];
 
   // --- LAYOUT COMUNE (sfondo natalizio + card centrale) ---
 
@@ -397,7 +562,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
     );
   }
 
-  return (
+    return (
     <Box
       sx={{
         minHeight: "100vh",
@@ -510,28 +675,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
             </Box>
           </Box>
 
-          {/* Riepilogo regole squadra (solo testo) */}
-          <Box sx={{ mb: 2.5 }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 600, mb: 0.5, color: fantaPalette.textPrimary }}
-            >
-              Come funziona la tua squadra:
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{ color: fantaPalette.textSecondary }}
-            >
-              • La squadra deve avere esattamente <strong>7 colleghi</strong>.
-              <br />
-              • Devi scegliere obbligatoriamente <strong>1 capitano</strong>.
-              <br />
-              • Puoi cambiare i membri e il capitano fino alla scadenza qui
-              sotto.
-            </Typography>
-          </Box>
-
-          {/* TIMER: card verde sfumata, stile Fanta Claus */}
+          {/* 1️⃣ TIMER: card verde sfumata, stile Fanta Claus */}
           <Box
             sx={{
               mb: 3,
@@ -586,7 +730,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                     color: "#ffffff",
                   }}
                 >
-                  Nessuna data limite impostata 🎄
+                  Nessuna data limite impostata
                 </Typography>
 
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
@@ -606,7 +750,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                     color: "#ffffff",
                   }}
                 >
-                  Tempo scaduto ⏰
+                  Tempo scaduto!
                 </Typography>
 
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
@@ -626,7 +770,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                     color: "#ffffff",
                   }}
                 >
-                  Puoi ancora modificare la tua squadra 🎄
+                  Puoi ancora modificare la tua squadra!
                 </Typography>
 
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
@@ -647,15 +791,282 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
             )}
           </Box>
 
-          {/* Contenuto principale: TeamBuilder prima della scadenza, voti dopo */}
+          {/* 2️⃣ BLOCCO VOTI / TEAM BUILDER */}
           {deadlineDate && isLocked ? (
             <VotingPanel playerId={playerId} participants={participants} />
           ) : (
-            <TeamBuilder
-              participants={participants}
-              playerId={playerId}
-              isLocked={Boolean(deadlineDate && isLocked)}
-            />
+            <>
+              {/* Alert verde di conferma salvataggio */}
+              {showSavedAlert && (
+                <Alert
+                  severity="success"
+                  onClose={() => setShowSavedAlert(false)}
+                  sx={{
+                    mb: 2,
+                    borderRadius: 999,
+                    alignItems: "center",
+                  }}
+                >
+                  Squadra salvata. Puoi modificarla finché non scade il tempo.
+                </Alert>
+              )}
+
+              {/* Bottone Salva squadra centrato sopra i pacchi */}
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  mb: 2,
+                }}
+              >
+                <Button
+                  variant="contained"
+                  onClick={handleSave}
+                  sx={{
+                    px: 5,
+                    py: 1.6,
+                    fontSize: "1.15rem",
+                    fontWeight: 700,
+                    borderRadius: 40,
+                    backgroundImage: fantaPalette.buttonGradient,
+                    color: fantaPalette.buttonText,
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+                    transition: "0.25s ease",
+                    opacity: canSave ? 1 : 0.5,
+                    transform: canSave ? "scale(1)" : "scale(0.97)",
+                    "&:hover": canSave
+                      ? {
+                          backgroundImage: fantaPalette.buttonGradientHover,
+                          transform: "scale(1.04)",
+                          boxShadow: "0 14px 35px rgba(0,0,0,0.35)",
+                        }
+                      : {},
+                  }}
+                >
+                  Salva squadra
+                </Button>
+              </Box>
+
+              <TeamBuilder
+                participants={participants}
+                playerId={playerId}
+                isLocked={Boolean(deadlineDate && isLocked)}
+                onTeamStateChange={handleTeamStateChange}
+              />
+            </>
+          )}
+
+          {/* 3️⃣ SQUADRA / REGOLE (ULTIMO BLOCCO) */}
+          {deadlineDate && isLocked ? (
+            <Box sx={{ mt: 3 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: "1.15rem",
+                  mb: 0.5,
+                  color: fantaPalette.textPrimary,
+                }}
+              >
+                La tua squadra
+              </Typography>
+
+              {teamLoading ? (
+                <Typography
+                  variant="body2"
+                  sx={{ color: fantaPalette.textSecondary }}
+                >
+                  Caricamento della tua squadra...
+                </Typography>
+              ) : !teamSummary || teamSummary.members.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  sx={{ color: fantaPalette.textSecondary }}
+                >
+                  Non risulta nessuna squadra salvata. In caso di dubbi
+                  contatta l&apos;organizzatore.
+                </Typography>
+              ) : (
+                <>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: fantaPalette.textSecondary,
+                      mb: 1,
+                    }}
+                  >
+                    Questa è la tua squadra. La tabella
+                    mostra i <strong>punti Fanta Claus</strong> ottenuti da
+                    ogni membro (il capitano vale doppio).
+                  </Typography>
+
+                  {scoresError && (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        mt: 1,
+                        color: "#ef4444",
+                      }}
+                    >
+                      {scoresError}
+                    </Typography>
+                  )}
+
+                  <Box sx={{ mt: 2 }}>
+                    {scoresLoading ? (
+                      <Typography
+                        variant="body2"
+                        sx={{ color: fantaPalette.textSecondary }}
+                      >
+                        Caricamento dei punteggi...
+                      </Typography>
+                    ) : !myLeaderboardRow ? (
+                      <Typography
+                        variant="body2"
+                        sx={{ color: fantaPalette.textSecondary }}
+                      >
+                        I punteggi non sono ancora disponibili. Riprova tra
+                        poco.
+                      </Typography>
+                    ) : (
+                      <Table
+                        size="small"
+                        sx={{
+                          backgroundColor: "rgba(255,255,255,0.8)",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Giocatore</TableCell>
+                            <TableCell align="center">Ruolo</TableCell>
+                            <TableCell align="right">
+                              Punti Fanta Claus
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {myLeaderboardRow.members.map((m) => {
+                            const isCaptain = m.isCaptain;
+                            const fantasyPoints = m.points;
+
+                            return (
+                              <TableRow
+                                key={m.id}
+                                sx={{
+                                  backgroundColor: isCaptain
+                                    ? "rgba(250, 204, 21, 0.12)"
+                                    : "transparent",
+                                }}
+                              >
+                                <TableCell>
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 1,
+                                    }}
+                                  >
+                                    <Box
+                                      component="img"
+                                      src={
+                                        isCaptain
+                                          ? "/icons/team/slot-captain.png"
+                                          : "/icons/team/slot-filled.png"
+                                      }
+                                      alt={
+                                        isCaptain
+                                          ? "Capitano"
+                                          : "Membro"
+                                      }
+                                      sx={{
+                                        width: 26,
+                                        height: 26,
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                    <Typography
+                                      variant="body2"
+                                      sx={{
+                                        fontWeight: isCaptain ? 600 : 400,
+                                      }}
+                                    >
+                                      {m.name}
+                                    </Typography>
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="center">
+                                  {isCaptain ? "Capitano" : "Membro"}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {fantasyPoints}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+
+                          <TableRow
+                            sx={{
+                              borderTop: "1px solid rgba(148,163,184,0.6)",
+                            }}
+                          >
+                            <TableCell />
+                            <TableCell
+                              sx={{ fontWeight: 700, pt: 0.8 }}
+                            >
+                              Totale squadra
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontWeight: 800,
+                                fontSize: "1.05rem",
+                                pt: 0.8,
+                              }}
+                            >
+                              {myLeaderboardRow.totalPoints}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    )}
+                  </Box>
+                </>
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ mt: 3 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 600,
+                  mb: 0.5,
+                  color: fantaPalette.textPrimary,
+                }}
+              >
+                Come funziona il Fanta Claus:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: fantaPalette.textSecondary }}
+              >
+                • Dopo l&apos;apertura dei pacchi, verrà assegnato un punteggio
+                in base alla tipoligia di <strong>regalo ricevuto</strong>.
+                <br />
+                • I punti assegnati alle tipologie di regalo verranno comunicati{" "}
+                <strong>successivamente</strong>.
+                <br />
+                • Componi la tua squadra composta da{" "}
+                <strong>7 colleghi</strong> scegliendo tra le card qui sotto.
+                <br />
+                • Nella tua squadra nomina un <strong>capitano</strong>: per lui
+                i punti saranno doppi, anche in negativo!
+                <br />
+                • Puoi cambiare i membri e il capitano fino alla{" "}
+                <strong>scadenza indicata</strong>.
+              </Typography>
+            </Box>
           )}
         </Paper>
       </Container>

@@ -17,9 +17,14 @@ import { fantaPalette } from "@/theme/fantaPalette";
 
 type TeamBuilderProps = {
   participants: Participant[];
-  maxMembers?: number;
   playerId: string;
-  isLocked?: boolean;
+  isLocked: boolean;
+  maxMembers?: number;
+  onTeamStateChange?: (state: {
+    selectedCount: number;
+    isComplete: boolean;
+    hasCaptain: boolean;
+  }) => void;
 };
 
 type StoredTeam = {
@@ -49,9 +54,10 @@ function isLocalStorageTeamObject(
 
 export default function TeamBuilder({
   participants,
-  maxMembers = 7,
   playerId,
-  isLocked = false,
+  isLocked,
+  maxMembers = 7,
+  onTeamStateChange,
 }: TeamBuilderProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [captainId, setCaptainId] = useState<string>("");
@@ -218,6 +224,16 @@ export default function TeamBuilder({
   const missingSlots = Math.max(0, maxMembers - selectedIds.length);
   const hasCaptain = !!captainId;
 
+  // Notifica al genitore (Profilo) lo stato corrente
+  useEffect(() => {
+    if (!onTeamStateChange) return;
+    onTeamStateChange({
+      selectedCount: selectedIds.length,
+      isComplete: hasFullTeam,
+      hasCaptain,
+    });
+  }, [selectedIds.length, hasFullTeam, hasCaptain, onTeamStateChange]);
+
   return (
     <Box>
       {isLocked && (
@@ -232,8 +248,12 @@ export default function TeamBuilder({
         {/* Messaggio dinamico sopra i pacchi */}
         {!hasFullTeam && (
           <Typography
-            variant="body2"
-            sx={{ mb: 1, color: fantaPalette.textSecondary }}
+            variant="subtitle1"
+            sx={{
+              mb: 1,
+              color: fantaPalette.textSecondary,
+              fontWeight: 600,
+            }}
           >
             {missingSlots === 1
               ? "Ti manca ancora 1 giocatore per completare la squadra (7 su 7)."
@@ -243,8 +263,12 @@ export default function TeamBuilder({
 
         {hasFullTeam && !hasCaptain && (
           <Typography
-            variant="body2"
-            sx={{ mb: 1, color: fantaPalette.textSecondary }}
+            variant="subtitle1"
+            sx={{
+              mb: 1,
+              color: fantaPalette.textSecondary,
+              fontWeight: 600,
+            }}
           >
             La squadra è completa! Ora scegli il{" "}
             <strong>capitano</strong> cliccando sull&apos;icona regalo su una
@@ -254,11 +278,11 @@ export default function TeamBuilder({
 
         {hasFullTeam && hasCaptain && (
           <Typography
-            variant="body2"
+            variant="subtitle1"
             sx={{
               mb: 1,
               color: fantaPalette.textSecondary,
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
             Hai finito! <strong>Buona fortuna!</strong>

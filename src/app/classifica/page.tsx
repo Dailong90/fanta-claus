@@ -206,16 +206,13 @@ export default function ClassificaPage() {
                 color: "#e11d48",
               }}
             >
-              Classifica non ancora disponibile
+              Classifica non disponibile
             </Typography>
             <Typography
               variant="body1"
               sx={{ color: fantaPalette.textSecondary }}
             >
-              La classifica non è stata ancora pubblicata
-              dall&apos;organizzatore del Fanta Claus.
-              <br />
-              Torna a dare un&apos;occhiata più tardi! 🎅
+              La classifica non è stata ancora pubblicata. 
             </Typography>
           </Paper>
         </Container>

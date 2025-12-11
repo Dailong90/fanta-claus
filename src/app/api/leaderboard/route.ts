@@ -78,6 +78,7 @@ type LeaderboardResponse = {
   teams: LeaderboardTeam[];
   voting?: LeaderboardVotingWinners;
   votingDetails?: LeaderboardVotingDetails;
+  isPublished?: boolean;
 };
 
 const DEFAULT_VOTE_POINTS: VotePointsConfig = {
@@ -102,6 +103,41 @@ const NORMALIZED_VOTE_TYPE: Record<string, VoteType | undefined> = {
 };
 
 export async function GET() {
+  // 0) Flag "classifica pubblicata?" da game_settings.leaderboard_published
+  let isPublished = true; // default: visibile (puoi cambiare in false se vuoi il contrario)
+
+  try {
+    const { data: publishSetting, error: publishError } = await supabaseAdmin
+      .from("game_settings")
+      .select("value")
+      .eq("key", "leaderboard_published")
+      .maybeSingle<{ value: unknown }>();
+
+    if (!publishError && publishSetting) {
+      const v = publishSetting.value;
+
+      if (typeof v === "boolean") {
+        isPublished = v;
+      } else if (typeof v === "string") {
+        // gestiamo "true"/"false"/"1"/"0"
+        const lower = v.toLowerCase().trim();
+        isPublished = lower === "true" || lower === "1";
+      } else if (v && typeof v === "object" && "published" in v) {
+        const inner = (v as { published?: unknown }).published;
+        if (typeof inner === "boolean") {
+          isPublished = inner;
+        } else if (typeof inner === "string") {
+          const lower = inner.toLowerCase().trim();
+          isPublished = lower === "true" || lower === "1";
+        }
+      }
+    } else if (publishError) {
+      console.error("❌ Errore lettura game_settings.leaderboard_published", publishError);
+    }
+  } catch (err) {
+    console.error("❌ Errore runtime lettura leaderboard_published", err);
+  }
+
   // 1) Squadre
   const { data: teams, error: teamsError } = await supabaseAdmin
     .from("teams")
@@ -336,6 +372,7 @@ export async function GET() {
     teams: leaderboard,
     voting: votingWinners,
     votingDetails,
+    isPublished,
   };
 
   return NextResponse.json(response);

@@ -17,35 +17,51 @@ import Image from "next/image";
 export default function HomePage() {
   const router = useRouter();
 
-  // 👇 Mostrare o meno il podio in base alla presenza della classifica
-  const [showPodium, setShowPodium] = useState(false);
-  const [podiumLoading, setPodiumLoading] = useState(true);
+  // 🔹 Stato per "classifica pubblicata?"
+  const [isLeaderboardPublished, setIsLeaderboardPublished] = useState(false);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
 
+  // Legge lo stato di pubblicazione classifica da /api/leaderboard (isPublished)
   useEffect(() => {
-    const checkLeaderboard = async () => {
+    const fetchLeaderboardStatus = async () => {
       try {
         const res = await fetch("/api/leaderboard");
         if (!res.ok) {
-          console.error("Errore recupero leaderboard", await res.text());
-          setShowPodium(false);
+          console.error("Errore lettura leaderboard", await res.text());
+          // se qualcosa va storto, per sicurezza NON mostro il podio
+          setIsLeaderboardPublished(false);
           return;
         }
 
-        const data = await res.json();
-        const teams = Array.isArray(data?.teams) ? data.teams : [];
-        setShowPodium(teams.length > 0);
+        const data = (await res.json()) as { isPublished?: boolean };
+
+        // Se il campo manca, di default consideriamo la classifica pubblicata
+        // (puoi cambiare in `false` se vuoi il contrario)
+        setIsLeaderboardPublished(data.isPublished ?? true);
       } catch (err) {
-        console.error("Errore fetch leaderboard", err);
-        setShowPodium(false);
+        console.error("Errore fetch leaderboard status", err);
+        setIsLeaderboardPublished(false);
       } finally {
-        setPodiumLoading(false);
+        setLeaderboardLoading(false);
       }
     };
 
-    checkLeaderboard();
+    fetchLeaderboardStatus();
   }, []);
 
   const handleGoToLogin = () => {
+    // Se l'utente ha già fatto login, lo portiamo direttamente al profilo
+    if (typeof window !== "undefined") {
+      const existingOwnerId = window.localStorage.getItem("fanta_owner_id");
+
+      if (existingOwnerId) {
+        // Sessione già presente → vai al profilo
+        router.push("/profilo");
+        return;
+      }
+    }
+
+    // Altrimenti flusso normale: pagina di login con inserimento codice
     router.push("/login");
   };
 
@@ -149,7 +165,7 @@ export default function HomePage() {
                 </Typography>
                 <Typography>
                   • Dopo l&apos;apertura dei pacchi torna sul tuo profilo per
-                  votare le tre categorie: pacco meglio realizzato, pacco peggio
+                  votare le tre categore: pacco meglio realizzato, pacco peggio
                   realizzato e regalo più azzeccato.{" "}
                   <strong>
                     I punti verranno assegnati sempre a chi riceve il pacco!
@@ -204,8 +220,8 @@ export default function HomePage() {
         </Paper>
       </Container>
 
-      {/* CARD PODIO: seconda card, visibile solo se esiste una classifica */}
-      {!podiumLoading && showPodium && (
+      {/* CARD PODIO: visibile solo se la classifica è pubblicata */}
+      {!leaderboardLoading && isLeaderboardPublished && (
         <Container maxWidth="md">
           <PodiumPublic />
         </Container>

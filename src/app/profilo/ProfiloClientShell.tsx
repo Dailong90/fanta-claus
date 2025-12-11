@@ -562,7 +562,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
     );
   }
 
-    return (
+  return (
     <Box
       sx={{
         minHeight: "100vh",
@@ -674,6 +674,220 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
               </Button>
             </Box>
           </Box>
+
+          {/* 0️⃣ REGOLE IN ALTO (solo se la squadra è ancora componibile) 
+              oppure riepilogo squadra e punteggi dopo la scadenza */}
+          {deadlineDate && isLocked ? (
+            <Box sx={{ mb: 3 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: "1.15rem",
+                  mb: 0.5,
+                  color: fantaPalette.textPrimary,
+                }}
+              >
+                La tua squadra
+              </Typography>
+
+              {teamLoading ? (
+                <Typography
+                  variant="body2"
+                  sx={{ color: fantaPalette.textSecondary }}
+                >
+                  Caricamento della tua squadra...
+                </Typography>
+              ) : !teamSummary || teamSummary.members.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  sx={{ color: fantaPalette.textSecondary }}
+                >
+                  Non risulta nessuna squadra salvata. In caso di dubbi
+                  contatta l&apos;organizzatore.
+                </Typography>
+              ) : (
+                <>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: fantaPalette.textSecondary,
+                      mb: 1,
+                    }}
+                  >
+                    Questa è la tua squadra. La tabella
+                    mostra i <strong>punti Fanta Claus</strong> ottenuti da
+                    ogni membro (il capitano vale doppio).
+                  </Typography>
+
+                  {scoresError && (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        mt: 1,
+                        color: "#ef4444",
+                      }}
+                    >
+                      {scoresError}
+                    </Typography>
+                  )}
+
+                  <Box sx={{ mt: 2 }}>
+                    {scoresLoading ? (
+                      <Typography
+                        variant="body2"
+                        sx={{ color: fantaPalette.textSecondary }}
+                      >
+                        Caricamento dei punteggi...
+                      </Typography>
+                    ) : !myLeaderboardRow ? (
+                      <Typography
+                        variant="body2"
+                        sx={{ color: fantaPalette.textSecondary }}
+                      >
+                        I punteggi non sono ancora disponibili. Riprova tra
+                        poco.
+                      </Typography>
+                    ) : (
+                      <Table
+                        size="small"
+                        sx={{
+                          backgroundColor: "rgba(255,255,255,0.8)",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Giocatore</TableCell>
+                            <TableCell align="center">Ruolo</TableCell>
+                            <TableCell align="right">
+                              Punti Fanta Claus
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {myLeaderboardRow.members.map((m) => {
+                            const isCaptain = m.isCaptain;
+                            const fantasyPoints = m.points;
+
+                            return (
+                              <TableRow
+                                key={m.id}
+                                sx={{
+                                  backgroundColor: isCaptain
+                                    ? "rgba(250, 204, 21, 0.12)"
+                                    : "transparent",
+                                }}
+                              >
+                                <TableCell>
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 1,
+                                    }}
+                                  >
+                                    <Box
+                                      component="img"
+                                      src={
+                                        isCaptain
+                                          ? "/icons/team/slot-captain.png"
+                                          : "/icons/team/slot-filled.png"
+                                      }
+                                      alt={
+                                        isCaptain
+                                          ? "Capitano"
+                                          : "Membro"
+                                      }
+                                      sx={{
+                                        width: 26,
+                                        height: 26,
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                    <Typography
+                                      variant="body2"
+                                      sx={{
+                                        fontWeight: isCaptain ? 600 : 400,
+                                      }}
+                                    >
+                                      {m.name}
+                                    </Typography>
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="center">
+                                  {isCaptain ? "Capitano" : "Membro"}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {fantasyPoints}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+
+                          <TableRow
+                            sx={{
+                              borderTop: "1px solid rgba(148,163,184,0.6)",
+                            }}
+                          >
+                            <TableCell />
+                            <TableCell
+                              sx={{ fontWeight: 700, pt: 0.8 }}
+                            >
+                              Totale squadra
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{
+                                fontWeight: 800,
+                                fontSize: "1.05rem",
+                                pt: 0.8,
+                              }}
+                            >
+                              {myLeaderboardRow.totalPoints}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    )}
+                  </Box>
+                </>
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ mb: 3 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  fontWeight: 600,
+                  mb: 0.5,
+                  color: fantaPalette.textPrimary,
+                }}
+              >
+                Come funziona il Fanta Claus:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: fantaPalette.textSecondary }}
+              >
+                • Dopo l&apos;apertura dei pacchi, verrà assegnato un punteggio
+                in base alla tipoligia di <strong>regalo ricevuto</strong>.
+                <br />
+                • I punti assegnati alle tipologie di regalo verranno comunicati{" "}
+                <strong>successivamente</strong>.
+                <br />
+                • Componi la tua squadra composta da{" "}
+                <strong>7 colleghi</strong> scegliendo tra le card qui sotto.
+                <br />
+                • Nella tua squadra nomina un <strong>capitano</strong>: per lui
+                i punti saranno doppi, anche in negativo!
+                <br />
+                • Puoi cambiare i membri e il capitano fino alla{" "}
+                <strong>scadenza indicata</strong>.
+              </Typography>
+            </Box>
+          )}
 
           {/* 1️⃣ TIMER: card verde sfumata, stile Fanta Claus */}
           <Box
@@ -854,219 +1068,6 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                 onTeamStateChange={handleTeamStateChange}
               />
             </>
-          )}
-
-          {/* 3️⃣ SQUADRA / REGOLE (ULTIMO BLOCCO) */}
-          {deadlineDate && isLocked ? (
-            <Box sx={{ mt: 3 }}>
-              <Typography
-                variant="subtitle2"
-                sx={{
-                  fontWeight: 600,
-                  fontSize: "1.15rem",
-                  mb: 0.5,
-                  color: fantaPalette.textPrimary,
-                }}
-              >
-                La tua squadra
-              </Typography>
-
-              {teamLoading ? (
-                <Typography
-                  variant="body2"
-                  sx={{ color: fantaPalette.textSecondary }}
-                >
-                  Caricamento della tua squadra...
-                </Typography>
-              ) : !teamSummary || teamSummary.members.length === 0 ? (
-                <Typography
-                  variant="body2"
-                  sx={{ color: fantaPalette.textSecondary }}
-                >
-                  Non risulta nessuna squadra salvata. In caso di dubbi
-                  contatta l&apos;organizzatore.
-                </Typography>
-              ) : (
-                <>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: fantaPalette.textSecondary,
-                      mb: 1,
-                    }}
-                  >
-                    Questa è la tua squadra. La tabella
-                    mostra i <strong>punti Fanta Claus</strong> ottenuti da
-                    ogni membro (il capitano vale doppio).
-                  </Typography>
-
-                  {scoresError && (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        mt: 1,
-                        color: "#ef4444",
-                      }}
-                    >
-                      {scoresError}
-                    </Typography>
-                  )}
-
-                  <Box sx={{ mt: 2 }}>
-                    {scoresLoading ? (
-                      <Typography
-                        variant="body2"
-                        sx={{ color: fantaPalette.textSecondary }}
-                      >
-                        Caricamento dei punteggi...
-                      </Typography>
-                    ) : !myLeaderboardRow ? (
-                      <Typography
-                        variant="body2"
-                        sx={{ color: fantaPalette.textSecondary }}
-                      >
-                        I punteggi non sono ancora disponibili. Riprova tra
-                        poco.
-                      </Typography>
-                    ) : (
-                      <Table
-                        size="small"
-                        sx={{
-                          backgroundColor: "rgba(255,255,255,0.8)",
-                          borderRadius: 2,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Giocatore</TableCell>
-                            <TableCell align="center">Ruolo</TableCell>
-                            <TableCell align="right">
-                              Punti Fanta Claus
-                            </TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {myLeaderboardRow.members.map((m) => {
-                            const isCaptain = m.isCaptain;
-                            const fantasyPoints = m.points;
-
-                            return (
-                              <TableRow
-                                key={m.id}
-                                sx={{
-                                  backgroundColor: isCaptain
-                                    ? "rgba(250, 204, 21, 0.12)"
-                                    : "transparent",
-                                }}
-                              >
-                                <TableCell>
-                                  <Box
-                                    sx={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 1,
-                                    }}
-                                  >
-                                    <Box
-                                      component="img"
-                                      src={
-                                        isCaptain
-                                          ? "/icons/team/slot-captain.png"
-                                          : "/icons/team/slot-filled.png"
-                                      }
-                                      alt={
-                                        isCaptain
-                                          ? "Capitano"
-                                          : "Membro"
-                                      }
-                                      sx={{
-                                        width: 26,
-                                        height: 26,
-                                        flexShrink: 0,
-                                      }}
-                                    />
-                                    <Typography
-                                      variant="body2"
-                                      sx={{
-                                        fontWeight: isCaptain ? 600 : 400,
-                                      }}
-                                    >
-                                      {m.name}
-                                    </Typography>
-                                  </Box>
-                                </TableCell>
-                                <TableCell align="center">
-                                  {isCaptain ? "Capitano" : "Membro"}
-                                </TableCell>
-                                <TableCell align="right">
-                                  {fantasyPoints}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-
-                          <TableRow
-                            sx={{
-                              borderTop: "1px solid rgba(148,163,184,0.6)",
-                            }}
-                          >
-                            <TableCell />
-                            <TableCell
-                              sx={{ fontWeight: 700, pt: 0.8 }}
-                            >
-                              Totale squadra
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{
-                                fontWeight: 800,
-                                fontSize: "1.05rem",
-                                pt: 0.8,
-                              }}
-                            >
-                              {myLeaderboardRow.totalPoints}
-                            </TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    )}
-                  </Box>
-                </>
-              )}
-            </Box>
-          ) : (
-            <Box sx={{ mt: 3 }}>
-              <Typography
-                variant="subtitle2"
-                sx={{
-                  fontWeight: 600,
-                  mb: 0.5,
-                  color: fantaPalette.textPrimary,
-                }}
-              >
-                Come funziona il Fanta Claus:
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ color: fantaPalette.textSecondary }}
-              >
-                • Dopo l&apos;apertura dei pacchi, verrà assegnato un punteggio
-                in base alla tipoligia di <strong>regalo ricevuto</strong>.
-                <br />
-                • I punti assegnati alle tipologie di regalo verranno comunicati{" "}
-                <strong>successivamente</strong>.
-                <br />
-                • Componi la tua squadra composta da{" "}
-                <strong>7 colleghi</strong> scegliendo tra le card qui sotto.
-                <br />
-                • Nella tua squadra nomina un <strong>capitano</strong>: per lui
-                i punti saranno doppi, anche in negativo!
-                <br />
-                • Puoi cambiare i membri e il capitano fino alla{" "}
-                <strong>scadenza indicata</strong>.
-              </Typography>
-            </Box>
           )}
         </Paper>
       </Container>

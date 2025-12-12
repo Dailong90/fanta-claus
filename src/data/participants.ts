@@ -11,7 +11,7 @@ export const participants: Participant[] = [
   { id: "p3", name: "Annabella Ciardiello" },
   { id: "p4", name: "Annalisa Sena" },
   { id: "p5", name: "Annarita Parente" },
-  { id: "p6", name: "Antonio La Franza" },
+  { id: "p6", name: "Antonio La Frazia" },
   { id: "p7", name: "Fabio Iadarola" },
   { id: "p8", name: "Benedetta La Zazzera" },
   { id: "p9", name: "Carmen Del Vecchio" },

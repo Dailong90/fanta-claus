@@ -25,7 +25,7 @@ export const participants: Participant[] = [
   { id: "p17", name: "Luca Donnarumma" },
   { id: "p18", name: "Luca Garofalo" },
   { id: "p19", name: "Maria Giulia Giannuzzi" },
-  { id: "p20", name: "Maria Mira" },
+  { id: "p20", name: "Maria Mirra" },
   { id: "p21", name: "Marina Polese" },
   { id: "p22", name: "Mario Pio Capone" },
   { id: "p23", name: "Roberto Martin Vetrone" },
@@ -35,7 +35,7 @@ export const participants: Participant[] = [
   { id: "p27", name: "Enrico De Cicco" },
   { id: "p28", name: "Veronica Clemente" },
   { id: "p29", name: "Moreno Carosella" },
-  { id: "p30", name: "Eleonora Frattesi" },
+  { id: "p30", name: "Eleonora Fratesi" },
   { id: "p31", name: "Antonella Ferraro" },
   { id: "p32", name: "Antonietta Pannese" },
   // ➜ qui aggiungi fino ad arrivare ai 32 partecipanti reali

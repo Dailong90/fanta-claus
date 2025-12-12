@@ -9,6 +9,7 @@ import {
   Paper,
   CircularProgress,
   Button,
+  Stack,
 } from "@mui/material";
 import { fantaPalette } from "@/theme/fantaPalette";
 
@@ -95,11 +96,23 @@ export default function PodiumPublic() {
         sx={{
           mb: 2,
           fontWeight: 700,
+          fontSize: "2rem",
           color: fantaPalette.textPrimary,
+          textAlign: "center",
         }}
       >
         Podio Fanta Claus
       </Typography>
+      <Stack alignItems="center">
+        <Image
+          src="/logo/fantaclaus.png"
+          alt="Fanta Claus"
+          width={240}
+          height={240}
+          style={{ width: "auto", height: 200, display: "block" }}
+          priority
+        />
+      </Stack>
 
       {loading ? (
         <Box sx={{ textAlign: "center", py: 3 }}>

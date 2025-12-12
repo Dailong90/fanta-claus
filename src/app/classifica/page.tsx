@@ -54,7 +54,6 @@ export default function ClassificaPage() {
   const [awardsLoading, setAwardsLoading] = useState(true);
   const [awardsError, setAwardsError] = useState<string | null>(null);
 
-  // 👇 stato pubblicazione classifica
   const [published, setPublished] = useState<boolean | null>(null);
   const [publishedLoading, setPublishedLoading] = useState(true);
 
@@ -145,7 +144,7 @@ export default function ClassificaPage() {
       awards.worst_wrapping.length === 0 &&
       awards.most_fitting.length === 0);
 
-  // ⏳ Fase di caricamento stato pubblicazione
+  // ⏳ Caricamento stato pubblicazione
   if (publishedLoading) {
     return (
       <Box
@@ -167,7 +166,7 @@ export default function ClassificaPage() {
     );
   }
 
-  // ❌ Classifica NON pubblicata → messaggio e basta
+  // ❌ Classifica NON pubblicata
   if (!published) {
     return (
       <Box
@@ -196,6 +195,23 @@ export default function ClassificaPage() {
             }}
             elevation={6}
           >
+            {/* Immagine in alto al centro */}
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                mb: 2,
+              }}
+            >
+              <Image
+                src="/classifica_no.png"
+                alt="Classifica non disponibile"
+                width={260}
+                height={260}
+                style={{ maxWidth: "100%", height: "auto" }}
+              />
+            </Box>
+
             <Typography
               variant="h5"
               sx={{
@@ -212,7 +228,7 @@ export default function ClassificaPage() {
               variant="body1"
               sx={{ color: fantaPalette.textSecondary }}
             >
-              La classifica non è stata ancora pubblicata. 
+              Babbo natale sta ancora consegnando i regali!
             </Typography>
           </Paper>
         </Container>
@@ -220,7 +236,7 @@ export default function ClassificaPage() {
     );
   }
 
-  // ✅ Classifica pubblicata → mostriamo tutto come prima
+  // ✅ Classifica pubblicata
   return (
     <Box
       sx={{
@@ -304,7 +320,6 @@ export default function ClassificaPage() {
                 <TableBody>
                   {teams.map((t, index) => (
                     <TableRow key={t.ownerId}>
-                      {/* POSIZIONE + PACCO ORO/ARGENTO/BRONZO */}
                       <TableCell sx={{ width: "90px" }}>
                         <Box
                           sx={{
@@ -347,12 +362,10 @@ export default function ClassificaPage() {
                         </Box>
                       </TableCell>
 
-                      {/* NOME SQUADRA */}
                       <TableCell sx={{ color: fantaPalette.textPrimary }}>
                         {t.ownerName}
                       </TableCell>
 
-                      {/* PUNTI */}
                       <TableCell
                         align="right"
                         sx={{ color: fantaPalette.textPrimary }}

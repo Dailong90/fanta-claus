@@ -25,6 +25,9 @@ import { participants } from "@/data/participants";
 import { supabase } from "@/lib/supabaseClient";
 import { fantaPalette } from "@/theme/fantaPalette";
 
+// ✅ Deadline votazioni fissa (ora italiana)
+const VOTING_DEADLINE = new Date("2025-12-16T13:00:00+01:00");
+
 // 🔹 Funzione di utilità per formattare il countdown in italiano
 function formatTimeLeft(ms: number): string {
   if (ms <= 0) return "0 secondi";
@@ -162,20 +165,15 @@ function VotingPanel({ playerId, participants }: VotingPanelProps) {
       <Typography variant="h5" sx={{ mb: 1 }}>
         Vota i pacchi!
       </Typography>
-      <Typography
-        variant="body2"
-        sx={{ mb: 2, color: "rgba(75,85,99,0.9)" }}
-      >
-        Ora che le squadre sono chiuse, esprimi il tuo voto:
-        scegli il pacco meglio realizzato, quello peggio realizzato
-        e il reaglo più azzeccato al destinatario. La persona più votata di ognuna delle tre categorie guadagnerà i punti indicati. Non puoi votare te stesso.
+      <Typography variant="body2" sx={{ mb: 2, color: "rgba(75,85,99,0.9)" }}>
+        Ora che le squadre sono chiuse, esprimi il tuo voto: scegli il pacco
+        meglio realizzato, quello peggio realizzato e il reaglo più azzeccato al
+        destinatario. La persona più votata di ognuna delle tre categorie
+        guadagnerà i punti indicati. Non puoi votare te stesso.
       </Typography>
 
       {errorMsg && (
-        <Typography
-          variant="body2"
-          sx={{ mb: 2, color: "#f97373" }}
-        >
+        <Typography variant="body2" sx={{ mb: 2, color: "#f97373" }}>
           {errorMsg}
         </Typography>
       )}
@@ -191,24 +189,14 @@ function VotingPanel({ playerId, participants }: VotingPanelProps) {
           }}
         >
           {(Object.keys(VOTE_LABELS) as VoteType[]).map((vt) => (
-            <FormControl
-              key={vt}
-              fullWidth
-              size="small"
-              sx={{ minWidth: 0 }}
-            >
+            <FormControl key={vt} fullWidth size="small" sx={{ minWidth: 0 }}>
               <InputLabel id={`vote-${vt}`}>{VOTE_LABELS[vt]}</InputLabel>
               <Select
                 labelId={`vote-${vt}`}
                 label={VOTE_LABELS[vt]}
                 value={votes[vt] ?? ""}
                 disabled={savingType === vt}
-                onChange={(e) =>
-                  handleChangeVote(
-                    vt,
-                    e.target.value as string
-                  )
-                }
+                onChange={(e) => handleChangeVote(vt, e.target.value as string)}
               >
                 <MenuItem value="">
                   <em>Nessuno selezionato</em>
@@ -255,6 +243,9 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
+  // ✅ “orologio” locale: lo aggiorniamo solo quando la squadra è lockata
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
+
   // stato per il bottone "Salva squadra"
   const [canSave, setCanSave] = useState(false);
   const [showSavedAlert, setShowSavedAlert] = useState(false);
@@ -267,9 +258,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
   const [teamLoading, setTeamLoading] = useState(false);
 
   // 🔹 punteggi dalla classifica (team ownerId -> dati squadra)
-  const [leaderboardMap, setLeaderboardMap] = useState<
-    Record<string, TeamScoreRow>
-  >({});
+  const [leaderboardMap, setLeaderboardMap] = useState<Record<string, TeamScoreRow>>({});
   const [scoresLoading, setScoresLoading] = useState(false);
   const [scoresError, setScoresError] = useState<string | null>(null);
 
@@ -278,10 +267,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
   const [deadlineLoading, setDeadlineLoading] = useState(true);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
 
-  const deadlineDate = useMemo(
-    () => (deadlineIso ? new Date(deadlineIso) : null),
-    [deadlineIso]
-  );
+  const deadlineDate = useMemo(() => (deadlineIso ? new Date(deadlineIso) : null), [deadlineIso]);
 
   const deadlineLabel = useMemo(() => {
     if (!deadlineDate) return "non impostata";
@@ -304,10 +290,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
       try {
         const res = await fetch("/api/admin/team-deadline");
         if (!res.ok) {
-          console.error(
-            "Errore lettura team-deadline",
-            await res.text()
-          );
+          console.error("Errore lettura team-deadline", await res.text());
           setDeadlineError("Impossibile leggere la data limite.");
           return;
         }
@@ -328,7 +311,6 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
   // 🔒 Gestione blocco + countdown in base alla deadline letta
   useEffect(() => {
     if (!deadlineDate) {
-      // Nessuna deadline impostata → mai bloccato, nessun timer
       setIsLocked(false);
       setTimeLeftMs(0);
       return;
@@ -357,6 +339,17 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
 
     return () => clearInterval(interval);
   }, [deadlineDate]);
+
+  // ✅ aggiorna "now" solo quando siamo in fase lockata (voti / attesa classifica)
+  useEffect(() => {
+    if (!isLocked) return;
+
+    setNowTs(Date.now());
+    const interval = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isLocked]);
+
+  const isVotingClosed = useMemo(() => nowTs >= VOTING_DEADLINE.getTime(), [nowTs]);
 
   // 👤 Carica nome e ruolo (admin) del giocatore da Supabase
   useEffect(() => {
@@ -416,9 +409,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
         }
 
         const memberIds = data.members ?? [];
-        const memberObjects = participants.filter((p) =>
-          memberIds.includes(p.id)
-        );
+        const memberObjects = participants.filter((p) => memberIds.includes(p.id));
 
         setTeamSummary({
           members: memberObjects,
@@ -434,7 +425,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
 
   // 🔢 Carica punteggi dalla leaderboard quando il periodo è scaduto
   useEffect(() => {
-    if (!isLocked) return; // finché non è scaduto non serve
+    if (!isLocked) return;
 
     const loadScores = async () => {
       setScoresLoading(true);
@@ -443,9 +434,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
         const res = await fetch("/api/leaderboard");
         if (!res.ok) {
           console.error("Errore lettura leaderboard", await res.text());
-          setScoresError(
-            "Impossibile caricare i punteggi della classifica."
-          );
+          setScoresError("Impossibile caricare i punteggi della classifica.");
           return;
         }
 
@@ -505,7 +494,6 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
       console.error("❌ Errore logout", err);
     }
 
-    // 🔥 Ripulisce il localStorage e notifica la navbar
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("fanta_owner_id");
       window.localStorage.removeItem("fanta_is_admin");
@@ -514,15 +502,11 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
 
     setLoggingOut(false);
 
-    // 🔄 Redirect + refresh
     router.push("/login");
     router.refresh();
   };
 
-  // riga della leaderboard relativa a questo giocatore (owner della squadra)
   const myLeaderboardRow = leaderboardMap[playerId];
-
-  // --- LAYOUT COMUNE (sfondo natalizio + card centrale) ---
 
   if (!hasPlayerId) {
     return (
@@ -553,8 +537,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
             }}
           >
             <Alert severity="warning">
-              Nessun giocatore specificato. Torna alla pagina di login e
-              riprova.
+              Nessun giocatore specificato. Torna alla pagina di login e riprova.
             </Alert>
           </Paper>
         </Container>
@@ -619,13 +602,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
               </Typography>
             </Box>
 
-            <Box
-              sx={{
-                display: "flex",
-                gap: 1,
-                alignItems: "center",
-              }}
-            >
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
               {isAdmin && (
                 <Button
                   variant="contained"
@@ -675,8 +652,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
             </Box>
           </Box>
 
-          {/* 0️⃣ REGOLE IN ALTO (solo se la squadra è ancora componibile) 
-              oppure riepilogo squadra e punteggi dopo la scadenza */}
+          {/* 0️⃣ REGOLE IN ALTO / oppure riepilogo squadra dopo scadenza */}
           {deadlineDate && isLocked ? (
             <Box sx={{ mb: 3 }}>
               <Typography
@@ -692,61 +668,39 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
               </Typography>
 
               {teamLoading ? (
-                <Typography
-                  variant="body2"
-                  sx={{ color: fantaPalette.textSecondary }}
-                >
+                <Typography variant="body2" sx={{ color: fantaPalette.textSecondary }}>
                   Caricamento della tua squadra...
                 </Typography>
               ) : !teamSummary || teamSummary.members.length === 0 ? (
-                <Typography
-                  variant="body2"
-                  sx={{ color: fantaPalette.textSecondary }}
-                >
-                  Non risulta nessuna squadra salvata. In caso di dubbi
-                  contatta l&apos;organizzatore.
+                <Typography variant="body2" sx={{ color: fantaPalette.textSecondary }}>
+                  Non risulta nessuna squadra salvata. In caso di dubbi contatta
+                  l&apos;organizzatore.
                 </Typography>
               ) : (
                 <>
                   <Typography
                     variant="body2"
-                    sx={{
-                      color: fantaPalette.textSecondary,
-                      mb: 1,
-                    }}
+                    sx={{ color: fantaPalette.textSecondary, mb: 1 }}
                   >
-                    Questa è la tua squadra. La tabella
-                    mostra i <strong>punti Fanta Claus</strong> ottenuti da
-                    ogni membro (il capitano vale doppio).
+                    Questa è la tua squadra. La tabella mostra i{" "}
+                    <strong>punti Fanta Claus</strong> ottenuti da ogni membro (il
+                    capitano vale doppio).
                   </Typography>
 
                   {scoresError && (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        mt: 1,
-                        color: "#ef4444",
-                      }}
-                    >
+                    <Typography variant="body2" sx={{ mt: 1, color: "#ef4444" }}>
                       {scoresError}
                     </Typography>
                   )}
 
                   <Box sx={{ mt: 2 }}>
                     {scoresLoading ? (
-                      <Typography
-                        variant="body2"
-                        sx={{ color: fantaPalette.textSecondary }}
-                      >
+                      <Typography variant="body2" sx={{ color: fantaPalette.textSecondary }}>
                         Caricamento dei punteggi...
                       </Typography>
                     ) : !myLeaderboardRow ? (
-                      <Typography
-                        variant="body2"
-                        sx={{ color: fantaPalette.textSecondary }}
-                      >
-                        I punteggi non sono ancora disponibili. Riprova tra
-                        poco.
+                      <Typography variant="body2" sx={{ color: fantaPalette.textSecondary }}>
+                        I punteggi non sono ancora disponibili. Riprova tra poco.
                       </Typography>
                     ) : (
                       <Table
@@ -761,9 +715,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                           <TableRow>
                             <TableCell>Giocatore</TableCell>
                             <TableCell align="center">Ruolo</TableCell>
-                            <TableCell align="right">
-                              Punti Fanta Claus
-                            </TableCell>
+                            <TableCell align="right">Punti Fanta Claus</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -795,22 +747,12 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                                           ? "/icons/team/slot-captain.png"
                                           : "/icons/team/slot-filled.png"
                                       }
-                                      alt={
-                                        isCaptain
-                                          ? "Capitano"
-                                          : "Membro"
-                                      }
-                                      sx={{
-                                        width: 26,
-                                        height: 26,
-                                        flexShrink: 0,
-                                      }}
+                                      alt={isCaptain ? "Capitano" : "Membro"}
+                                      sx={{ width: 26, height: 26, flexShrink: 0 }}
                                     />
                                     <Typography
                                       variant="body2"
-                                      sx={{
-                                        fontWeight: isCaptain ? 600 : 400,
-                                      }}
+                                      sx={{ fontWeight: isCaptain ? 600 : 400 }}
                                     >
                                       {m.name}
                                     </Typography>
@@ -819,31 +761,21 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                                 <TableCell align="center">
                                   {isCaptain ? "Capitano" : "Membro"}
                                 </TableCell>
-                                <TableCell align="right">
-                                  {fantasyPoints}
-                                </TableCell>
+                                <TableCell align="right">{fantasyPoints}</TableCell>
                               </TableRow>
                             );
                           })}
 
                           <TableRow
-                            sx={{
-                              borderTop: "1px solid rgba(148,163,184,0.6)",
-                            }}
+                            sx={{ borderTop: "1px solid rgba(148,163,184,0.6)" }}
                           >
                             <TableCell />
-                            <TableCell
-                              sx={{ fontWeight: 700, pt: 0.8 }}
-                            >
+                            <TableCell sx={{ fontWeight: 700, pt: 0.8 }}>
                               Totale squadra
                             </TableCell>
                             <TableCell
                               align="right"
-                              sx={{
-                                fontWeight: 800,
-                                fontSize: "1.05rem",
-                                pt: 0.8,
-                              }}
+                              sx={{ fontWeight: 800, fontSize: "1.05rem", pt: 0.8 }}
                             >
                               {myLeaderboardRow.totalPoints}
                             </TableCell>
@@ -859,29 +791,22 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
             <Box sx={{ mb: 3 }}>
               <Typography
                 variant="subtitle2"
-                sx={{
-                  fontWeight: 600,
-                  mb: 0.5,
-                  color: fantaPalette.textPrimary,
-                }}
+                sx={{ fontWeight: 600, mb: 0.5, color: fantaPalette.textPrimary }}
               >
                 Come funziona il Fanta Claus:
               </Typography>
-              <Typography
-                variant="body2"
-                sx={{ color: fantaPalette.textSecondary }}
-              >
-                • Dopo l&apos;apertura dei pacchi, verrà assegnato un punteggio
-                in base alla tipoligia di <strong>regalo ricevuto</strong>.
+              <Typography variant="body2" sx={{ color: fantaPalette.textSecondary }}>
+                • Dopo l&apos;apertura dei pacchi, verrà assegnato un punteggio in
+                base alla tipoligia di <strong>regalo ricevuto</strong>.
                 <br />
                 • I punti assegnati alle tipologie di regalo verranno comunicati{" "}
                 <strong>successivamente</strong>.
                 <br />
-                • Componi la tua squadra composta da{" "}
-                <strong>7 colleghi</strong> scegliendo tra le card qui sotto.
+                • Componi la tua squadra composta da <strong>7 colleghi</strong>{" "}
+                scegliendo tra le card qui sotto.
                 <br />
-                • Nella tua squadra nomina un <strong>capitano</strong>: per lui
-                i punti saranno doppi, anche in negativo!
+                • Nella tua squadra nomina un <strong>capitano</strong>: per lui i
+                punti saranno doppi, anche in negativo!
                 <br />
                 • Puoi cambiare i membri e il capitano fino alla{" "}
                 <strong>scadenza indicata</strong>.
@@ -889,7 +814,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
             </Box>
           )}
 
-          {/* 1️⃣ TIMER: card verde sfumata, stile Fanta Claus */}
+          {/* 1️⃣ TIMER */}
           <Box
             sx={{
               mb: 3,
@@ -902,103 +827,65 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
           >
             {deadlineLoading ? (
               <>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    mb: 1,
-                    color: "#ffffff",
-                  }}
-                >
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#fff" }}>
                   Caricamento data limite...
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Attendi un momento, stiamo recuperando il termine ultimo per
-                  modificare la squadra.
+                  Attendi un momento, stiamo recuperando il termine ultimo per modificare
+                  la squadra.
                 </Typography>
               </>
             ) : deadlineError ? (
               <>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    mb: 1,
-                    color: "#ffffff",
-                  }}
-                >
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#fff" }}>
                   Errore nella data limite ⚠️
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  {deadlineError} Puoi comunque modificare la squadra al
-                  momento.
+                  {deadlineError} Puoi comunque modificare la squadra al momento.
                 </Typography>
               </>
             ) : !deadlineDate ? (
               <>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    mb: 1,
-                    color: "#ffffff",
-                  }}
-                >
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#fff" }}>
                   Nessuna data limite impostata
                 </Typography>
-
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Al momento non è stata impostata una scadenza per modificare
-                  la squadra. Puoi continuare a scegliere membri e capitano
-                  liberamente finché l&apos;organizzazione non definirà una
-                  data limite.
+                  Al momento non è stata impostata una scadenza per modificare la squadra.
                 </Typography>
               </>
             ) : isLocked ? (
               <>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    mb: 1,
-                    color: "#ffffff",
-                  }}
-                >
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#fff" }}>
                   Tempo scaduto!
                 </Typography>
 
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
                   Il periodo per modificare la squadra è terminato il{" "}
-                  <strong>{deadlineLabel}</strong>. Ora puoi solo
-                  visualizzare i membri e il capitano scelti, e partecipare
-                  alle votazioni.
+                  <strong>{deadlineLabel}</strong>. 
+                  <br/>
+                  {isVotingClosed ? (
+                    <>
+                      {" "}
+                      Anche le <strong>votazioni</strong> sono chiuse: ora sei in attesa
+                      della classifica.
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      <strong>Ricordati si assegnare i voti!</strong> Puoi farlo fino al <strong>16 Dicembre alle 13:00.</strong>.
+                    </>
+                  )}
                 </Typography>
               </>
             ) : (
               <>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    mb: 1,
-                    color: "#ffffff",
-                  }}
-                >
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: "#fff" }}>
                   Puoi ancora modificare la tua squadra!
                 </Typography>
-
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
                   Data limite: <strong>{deadlineLabel}</strong>
                 </Typography>
-
-                <Typography
-                  variant="h5"
-                  sx={{
-                    fontWeight: 800,
-                    mt: 1,
-                    color: "#ffffff",
-                  }}
-                >
+                <Typography variant="h5" sx={{ fontWeight: 800, mt: 1, color: "#fff" }}>
                   Mancano: {formatTimeLeft(timeLeftMs)}
                 </Typography>
               </>
@@ -1007,32 +894,35 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
 
           {/* 2️⃣ BLOCCO VOTI / TEAM BUILDER */}
           {deadlineDate && isLocked ? (
-            <VotingPanel playerId={playerId} participants={participants} />
+            isVotingClosed ? (
+              <Box sx={{ mt: 2, mb: 1, textAlign: "center" }}>
+                <Typography
+                  variant="h6"
+                  sx={{ fontWeight: 700, color: fantaPalette.textPrimary }}
+                >
+                  Votazioni chiuse
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5, color: fantaPalette.textSecondary }}>
+                  Le votazioni sono terminate. Ora non resta che attendere la{" "}
+                  <strong>pubblicazione della classifica</strong>.
+                </Typography>
+              </Box>
+            ) : (
+              <VotingPanel playerId={playerId} participants={participants} />
+            )
           ) : (
             <>
-              {/* Alert verde di conferma salvataggio */}
               {showSavedAlert && (
                 <Alert
                   severity="success"
                   onClose={() => setShowSavedAlert(false)}
-                  sx={{
-                    mb: 2,
-                    borderRadius: 999,
-                    alignItems: "center",
-                  }}
+                  sx={{ mb: 2, borderRadius: 999, alignItems: "center" }}
                 >
                   Squadra salvata. Puoi modificarla finché non scade il tempo.
                 </Alert>
               )}
 
-              {/* Bottone Salva squadra centrato sopra i pacchi */}
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  mb: 2,
-                }}
-              >
+              <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
                 <Button
                   variant="contained"
                   onClick={handleSave}

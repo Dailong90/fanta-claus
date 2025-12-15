@@ -24,6 +24,7 @@ type CategoryRow = {
 type PlayerRow = {
   owner_id: string;
   name: string | null;
+  is_admin?: boolean | null;
 };
 
 type VoteType = "best_wrapping" | "worst_wrapping" | "most_fitting";
@@ -102,9 +103,50 @@ const NORMALIZED_VOTE_TYPE: Record<string, VoteType | undefined> = {
   mostFitting: "most_fitting",
 };
 
-export async function GET() {
+async function isAdminRequest(req: Request): Promise<boolean> {
+  const ownerId = req.headers.get("x-fanta-owner-id");
+  if (!ownerId) return false;
+
+  const { data, error } = await supabaseAdmin
+    .from("players")
+    .select("is_admin")
+    .eq("owner_id", ownerId)
+    .maybeSingle<{ is_admin: boolean }>();
+
+  if (error) {
+    console.error("❌ Errore verifica admin in /api/leaderboard", error);
+    return false;
+  }
+  return data?.is_admin === true;
+}
+
+function readPublishedFlag(value: unknown): boolean {
+  // default false se non troviamo nulla
+  if (typeof value === "boolean") return value;
+
+  if (typeof value === "string") {
+    const lower = value.toLowerCase().trim();
+    return lower === "true" || lower === "1";
+  }
+
+  if (value && typeof value === "object" && "published" in value) {
+    const inner = (value as { published?: unknown }).published;
+    if (typeof inner === "boolean") return inner;
+    if (typeof inner === "string") {
+      const lower = inner.toLowerCase().trim();
+      return lower === "true" || lower === "1";
+    }
+  }
+
+  return false;
+}
+
+export async function GET(req: Request) {
+  // ✅ admin può vedere tutto anche se non pubblicato
+  const admin = await isAdminRequest(req);
+
   // 0) Flag "classifica pubblicata?" da game_settings.leaderboard_published
-  let isPublished = true; // default: visibile (puoi cambiare in false se vuoi il contrario)
+  let isPublished = false;
 
   try {
     const { data: publishSetting, error: publishError } = await supabaseAdmin
@@ -113,30 +155,22 @@ export async function GET() {
       .eq("key", "leaderboard_published")
       .maybeSingle<{ value: unknown }>();
 
-    if (!publishError && publishSetting) {
-      const v = publishSetting.value;
+    if (publishError) {
+      console.error(
+        "❌ Errore lettura game_settings.leaderboard_published",
+        publishError
+      );
+    }
 
-      if (typeof v === "boolean") {
-        isPublished = v;
-      } else if (typeof v === "string") {
-        // gestiamo "true"/"false"/"1"/"0"
-        const lower = v.toLowerCase().trim();
-        isPublished = lower === "true" || lower === "1";
-      } else if (v && typeof v === "object" && "published" in v) {
-        const inner = (v as { published?: unknown }).published;
-        if (typeof inner === "boolean") {
-          isPublished = inner;
-        } else if (typeof inner === "string") {
-          const lower = inner.toLowerCase().trim();
-          isPublished = lower === "true" || lower === "1";
-        }
-      }
-    } else if (publishError) {
-      console.error("❌ Errore lettura game_settings.leaderboard_published", publishError);
+    if (publishSetting) {
+      isPublished = readPublishedFlag(publishSetting.value);
     }
   } catch (err) {
     console.error("❌ Errore runtime lettura leaderboard_published", err);
   }
+
+  // 🔒 regola: punti votazioni e dettagli visibili SOLO se pubblicato oppure admin
+  const canRevealVoting = isPublished || admin;
 
   // 1) Squadre
   const { data: teams, error: teamsError } = await supabaseAdmin
@@ -198,35 +232,36 @@ export async function GET() {
 
   // 5) Config punti votazioni
   let votePointsConfig: VotePointsConfig = DEFAULT_VOTE_POINTS;
-  try {
-    const { data: voteSettings, error: voteSettingsError } =
-      await supabaseAdmin
+
+  // ⚠️ se NON è pubblicato e NON admin, forziamo i punti votazioni a 0
+  if (canRevealVoting) {
+    try {
+      const { data: voteSettings, error: voteSettingsError } = await supabaseAdmin
         .from("game_settings")
         .select("value")
         .eq("key", "vote_points")
         .maybeSingle<{ value: Partial<VotePointsConfig> }>();
 
-    if (!voteSettingsError && voteSettings?.value) {
-      votePointsConfig = {
-        best_wrapping:
-          Number(voteSettings.value.best_wrapping ?? 0) || 0,
-        worst_wrapping:
-          Number(voteSettings.value.worst_wrapping ?? 0) || 0,
-        most_fitting:
-          Number(voteSettings.value.most_fitting ?? 0) || 0,
-      };
+      if (!voteSettingsError && voteSettings?.value) {
+        votePointsConfig = {
+          best_wrapping: Number(voteSettings.value.best_wrapping ?? 0) || 0,
+          worst_wrapping: Number(voteSettings.value.worst_wrapping ?? 0) || 0,
+          most_fitting: Number(voteSettings.value.most_fitting ?? 0) || 0,
+        };
+      }
+    } catch (err) {
+      console.error("❌ Errore lettura game_settings.vote_points", err);
     }
-  } catch (err) {
-    console.error("❌ Errore lettura game_settings.vote_points", err);
   }
 
-  // 6) Voti (tabella CORRETTA: package_votes)
+  // 6) Voti (tabella: package_votes)
   const { data: votes, error: votesError } = await supabaseAdmin
     .from("package_votes")
     .select("voter_owner_id, target_owner_id, vote_type");
 
   let votingWinners: LeaderboardVotingWinners | undefined;
   const votingBonusByPlayer = new Map<string, number>();
+
   const votingDetails: LeaderboardVotingDetails = {
     best_wrapping: [],
     worst_wrapping: [],
@@ -245,10 +280,7 @@ export async function GET() {
 
     voteRows.forEach((v) => {
       const normalized = NORMALIZED_VOTE_TYPE[v.vote_type];
-      if (!normalized) {
-        // tipo sconosciuto → lo ignoriamo
-        return;
-      }
+      if (!normalized) return;
 
       const targetId = v.target_owner_id;
       const voterId = v.voter_owner_id;
@@ -257,15 +289,17 @@ export async function GET() {
       const current = counts[normalized][targetId] ?? 0;
       counts[normalized][targetId] = current + 1;
 
-      // dettaglio voto singolo per admin
-      const perVotePoints = votePointsConfig[normalized];
-      votingDetails[normalized].push({
-        voterOwnerId: voterId,
-        voterName: playerNameMap.get(voterId) ?? voterId,
-        targetOwnerId: targetId,
-        targetName: playerNameMap.get(targetId) ?? targetId,
-        pointsApplied: perVotePoints,
-      });
+      // dettaglio voto singolo (solo se canRevealVoting)
+      if (canRevealVoting) {
+        const perVotePoints = votePointsConfig[normalized];
+        votingDetails[normalized].push({
+          voterOwnerId: voterId,
+          voterName: playerNameMap.get(voterId) ?? voterId,
+          targetOwnerId: targetId,
+          targetName: playerNameMap.get(targetId) ?? targetId,
+          pointsApplied: perVotePoints,
+        });
+      }
     });
 
     const winnersResult: LeaderboardVotingWinners = {
@@ -278,9 +312,7 @@ export async function GET() {
       (type) => {
         const mapForType = counts[type];
         const entries = Object.entries(mapForType);
-        if (entries.length === 0) {
-          return;
-        }
+        if (entries.length === 0) return;
 
         const maxVotes = entries.reduce(
           (max, [, value]) => (value > max ? value : max),
@@ -292,9 +324,11 @@ export async function GET() {
           .map(([targetId, value]) => {
             const pointsAwarded = votePointsConfig[type];
 
-            // bonus al giocatore vincitore
-            const prev = votingBonusByPlayer.get(targetId) ?? 0;
-            votingBonusByPlayer.set(targetId, prev + pointsAwarded);
+            // ✅ bonus al giocatore vincitore SOLO se canRevealVoting
+            if (canRevealVoting) {
+              const prev = votingBonusByPlayer.get(targetId) ?? 0;
+              votingBonusByPlayer.set(targetId, prev + pointsAwarded);
+            }
 
             return {
               ownerId: targetId,
@@ -308,7 +342,10 @@ export async function GET() {
       }
     );
 
-    votingWinners = winnersResult;
+    // ✅ winners visibili SOLO se canRevealVoting
+    if (canRevealVoting) {
+      votingWinners = winnersResult;
+    }
   } else if (votesError) {
     console.error("❌ Errore lettura package_votes", votesError);
   }
@@ -331,15 +368,16 @@ export async function GET() {
   const leaderboard: LeaderboardTeam[] = (teams as TeamRow[])
     .map<LeaderboardTeam | null>((t) => {
       const members = t.members ?? [];
-      if (!Array.isArray(members) || members.length === 0) {
-        return null;
-      }
+      if (!Array.isArray(members) || members.length === 0) return null;
 
       const captainId = t.captain_id ?? null;
 
       const membersDetailed: MemberScore[] = members.map((mid) => {
         const baseGift = giftScoreBySanta.get(mid) ?? 0;
-        const voteBonus = votingBonusByPlayer.get(mid) ?? 0;
+
+        // ✅ punti votazioni SOLO se canRevealVoting
+        const voteBonus = canRevealVoting ? (votingBonusByPlayer.get(mid) ?? 0) : 0;
+
         const basePts = baseGift + voteBonus;
 
         const isCaptain = captainId === mid;
@@ -353,10 +391,7 @@ export async function GET() {
         };
       });
 
-      const totalPoints = membersDetailed.reduce(
-        (sum, m) => sum + m.points,
-        0
-      );
+      const totalPoints = membersDetailed.reduce((sum, m) => sum + m.points, 0);
 
       return {
         ownerId: t.owner_id,
@@ -370,10 +405,14 @@ export async function GET() {
 
   const response: LeaderboardResponse = {
     teams: leaderboard,
-    voting: votingWinners,
-    votingDetails,
     isPublished,
   };
+
+  // ✅ info votazioni SOLO se pubblicato o admin
+  if (canRevealVoting) {
+    response.voting = votingWinners;
+    response.votingDetails = votingDetails;
+  }
 
   return NextResponse.json(response);
 }

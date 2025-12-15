@@ -77,7 +77,6 @@ type CategoryDialogState = {
 };
 
 type VoteType = "best_wrapping" | "worst_wrapping" | "most_fitting";
-
 type VotePointsConfig = Record<VoteType, number>;
 
 type LeaderboardMember = {
@@ -108,18 +107,18 @@ type LeaderboardVotingWinners = Record<
   }
 >;
 
-type LeaderboardVoteDetail = {
+// 👇 come arriva dal backend in /api/leaderboard (votingDetails)
+type LeaderboardVoteDetailRow = {
   voterOwnerId: string;
   voterName: string;
   targetOwnerId: string;
   targetName: string;
-  voteType: string;
+  pointsApplied: number;
 };
 
-type LeaderboardApiResponse = {
-  teams: LeaderboardTeam[];
-  voting?: LeaderboardVotingWinners;
-  votesDetail?: LeaderboardVoteDetail[];
+// 👇 per la tabella (flatten)
+type LeaderboardVoteDetail = LeaderboardVoteDetailRow & {
+  voteType: VoteType;
 };
 
 const VOTE_LABELS: Record<VoteType, string> = {
@@ -152,6 +151,7 @@ function formatDeadlineLabel(iso: string | null): string {
 }
 
 export default function AdminRegaliClient({
+  currentAdminName,
   players,
   categories,
 }: AdminRegaliClientProps) {
@@ -317,10 +317,7 @@ export default function AdminRegaliClient({
       try {
         const res = await fetch("/api/admin/team-deadline");
         if (!res.ok) {
-          console.error(
-            "Errore lettura team-deadline",
-            await res.text()
-          );
+          console.error("Errore lettura team-deadline", await res.text());
           return;
         }
         const json = (await res.json()) as { deadlineIso: string | null };
@@ -368,9 +365,7 @@ export default function AdminRegaliClient({
     category_id: string,
     bonus_points: number
   ) => {
-    if (!category_id) {
-      return;
-    }
+    if (!category_id) return;
 
     try {
       setSavingFor(santa_owner_id);
@@ -535,9 +530,7 @@ export default function AdminRegaliClient({
     try {
       const res = await fetch(
         `/api/admin/categories?id=${encodeURIComponent(deleteTarget.id)}`,
-        {
-          method: "DELETE",
-        }
+        { method: "DELETE" }
       );
 
       if (!res.ok) {
@@ -554,9 +547,7 @@ export default function AdminRegaliClient({
         return;
       }
 
-      setCategoriesState((prev) =>
-        prev.filter((c) => c.id !== deleteTarget.id)
-      );
+      setCategoriesState((prev) => prev.filter((c) => c.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err) {
       console.error("Errore eliminazione categoria", err);
@@ -589,8 +580,7 @@ export default function AdminRegaliClient({
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        const msg =
-          body?.error ?? "Errore nel salvataggio dei punti votazioni.";
+        const msg = body?.error ?? "Errore nel salvataggio dei punti votazioni.";
         alert(msg);
         return;
       }
@@ -624,8 +614,7 @@ export default function AdminRegaliClient({
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        const msg =
-          body?.error ?? "Errore nel salvataggio della data di scadenza.";
+        const msg = body?.error ?? "Errore nel salvataggio della data di scadenza.";
         alert(msg);
         return;
       }
@@ -647,21 +636,57 @@ export default function AdminRegaliClient({
   const handleLoadLeaderboardPreview = async () => {
     setLeaderboardLoading(true);
     setLeaderboardError(null);
+
     try {
-      const res = await fetch("/api/leaderboard");
+      // 🔐 admin: passiamo owner_id per poter vedere votazioni anche se non pubbliche
+      const ownerId =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("fanta_owner_id")
+          : null;
+
+      const res = await fetch("/api/leaderboard", {
+        headers: ownerId ? { "x-fanta-owner-id": ownerId } : undefined,
+      });
+
       if (!res.ok) {
         setLeaderboardError("Errore nel caricamento della classifica.");
         return;
       }
-      const json = (await res.json()) as LeaderboardApiResponse;
-      setLeaderboardPreview(json.teams);
+
+      const json = (await res.json()) as {
+        teams: LeaderboardTeam[];
+        voting?: LeaderboardVotingWinners;
+        votingDetails?: Record<VoteType, LeaderboardVoteDetailRow[]>;
+        isPublished?: boolean;
+      };
+
+      setLeaderboardPreview(Array.isArray(json.teams) ? json.teams : []);
       setLeaderboardVoting(json.voting ?? null);
-      setLeaderboardVotesDetail(json.votesDetail ?? []);
+
+      // ✅ flatten votingDetails (oggetto) -> array per la tabella
+      const detailsObj = json.votingDetails ?? null;
+      const flat: LeaderboardVoteDetail[] = [];
+
+      if (detailsObj) {
+        (Object.keys(VOTE_LABELS) as VoteType[]).forEach((vt) => {
+          const rows = Array.isArray(detailsObj[vt]) ? detailsObj[vt] : [];
+          rows.forEach((r) => {
+            flat.push({
+              voteType: vt,
+              voterOwnerId: r.voterOwnerId,
+              voterName: r.voterName,
+              targetOwnerId: r.targetOwnerId,
+              targetName: r.targetName,
+              pointsApplied: r.pointsApplied,
+            });
+          });
+        });
+      }
+
+      setLeaderboardVotesDetail(flat);
     } catch (err) {
       console.error("Errore rete classifica", err);
-      setLeaderboardError(
-        "Errore di rete nel caricamento della classifica."
-      );
+      setLeaderboardError("Errore di rete nel caricamento della classifica.");
     } finally {
       setLeaderboardLoading(false);
     }
@@ -741,14 +766,11 @@ export default function AdminRegaliClient({
       setResetMessage(null);
       setResetError(null);
 
-      const res = await fetch("/api/admin/reset-game", {
-        method: "POST",
-      });
+      const res = await fetch("/api/admin/reset-game", { method: "POST" });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        const msg =
-          data?.error ?? "Errore nel reset dei dati di gioco.";
+        const msg = data?.error ?? "Errore nel reset dei dati di gioco.";
         setResetError(msg);
         alert(msg);
         return;
@@ -761,7 +783,6 @@ export default function AdminRegaliClient({
       setResetMessage(msg);
       alert(msg);
 
-      // Pulizia stato locale per coerenza con il backend
       setGiftMap({});
       setLeaderboardPreview(null);
       setLeaderboardVoting(null);
@@ -807,6 +828,12 @@ export default function AdminRegaliClient({
             flexWrap: "wrap",
           }}
         >
+          <Box>
+            <Typography variant="overline" sx={{ opacity: 0.7 }}>
+              Admin: {currentAdminName}
+            </Typography>
+          </Box>
+
           <Button
             variant="outlined"
             size="small"
@@ -923,10 +950,7 @@ export default function AdminRegaliClient({
             {leaderboardPreview && leaderboardPreview.length > 0 && (
               <>
                 <Box sx={{ width: "100%", overflowX: "auto" }}>
-                  <Table
-                    size="small"
-                    sx={{ minWidth: 500 }}
-                  >
+                  <Table size="small" sx={{ minWidth: 500 }}>
                     <TableHead>
                       <TableRow>
                         <TableCell sx={{ color: "rgba(148,163,184,1)" }}>
@@ -952,7 +976,6 @@ export default function AdminRegaliClient({
 
                         return (
                           <React.Fragment key={team.ownerId}>
-                            {/* Riga principale */}
                             <TableRow hover>
                               <TableCell>{index + 1}</TableCell>
                               <TableCell>{team.ownerName}</TableCell>
@@ -975,7 +998,6 @@ export default function AdminRegaliClient({
                               </TableCell>
                             </TableRow>
 
-                            {/* Riga dettaglio squadra */}
                             <TableRow>
                               <TableCell
                                 colSpan={4}
@@ -1009,25 +1031,13 @@ export default function AdminRegaliClient({
                                       >
                                         <TableHead>
                                           <TableRow>
-                                            <TableCell
-                                              sx={{
-                                                color: "rgba(51,65,85,1)",
-                                              }}
-                                            >
+                                            <TableCell sx={{ color: "rgba(51,65,85,1)" }}>
                                               Giocatore
                                             </TableCell>
-                                            <TableCell
-                                              sx={{
-                                                color: "rgba(51,65,85,1)",
-                                              }}
-                                            >
+                                            <TableCell sx={{ color: "rgba(51,65,85,1)" }}>
                                               Punti
                                             </TableCell>
-                                            <TableCell
-                                              sx={{
-                                                color: "rgba(51,65,85,1)",
-                                              }}
-                                            >
+                                            <TableCell sx={{ color: "rgba(51,65,85,1)" }}>
                                               Ruolo
                                             </TableCell>
                                           </TableRow>
@@ -1149,13 +1159,12 @@ export default function AdminRegaliClient({
                             <TableBody>
                               {leaderboardVotesDetail.map((v, idx) => (
                                 <TableRow
-                                  key={`${v.voterOwnerId}-${v.targetOwnerId}-${idx}`}
+                                  key={`${v.voterOwnerId}-${v.targetOwnerId}-${v.voteType}-${idx}`}
                                 >
                                   <TableCell>{v.voterName}</TableCell>
                                   <TableCell>{v.targetName}</TableCell>
                                   <TableCell>
-                                    {VOTE_LABELS[v.voteType as VoteType] ??
-                                      v.voteType}
+                                    {VOTE_LABELS[v.voteType] ?? v.voteType}
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -1264,9 +1273,7 @@ export default function AdminRegaliClient({
                 flexWrap: "wrap",
               }}
             >
-              <Typography variant="h6">
-                Punti per le votazioni dei pacchi
-              </Typography>
+              <Typography variant="h6">Punti per le votazioni dei pacchi</Typography>
               <Button
                 size="small"
                 variant="contained"
@@ -1300,10 +1307,7 @@ export default function AdminRegaliClient({
                   size="small"
                   value={votePoints.best_wrapping}
                   onChange={(e) =>
-                    handleChangeVotePointsField(
-                      "best_wrapping",
-                      e.target.value
-                    )
+                    handleChangeVotePointsField("best_wrapping", e.target.value)
                   }
                 />
                 <TextField
@@ -1312,10 +1316,7 @@ export default function AdminRegaliClient({
                   size="small"
                   value={votePoints.worst_wrapping}
                   onChange={(e) =>
-                    handleChangeVotePointsField(
-                      "worst_wrapping",
-                      e.target.value
-                    )
+                    handleChangeVotePointsField("worst_wrapping", e.target.value)
                   }
                 />
                 <TextField
@@ -1324,10 +1325,7 @@ export default function AdminRegaliClient({
                   size="small"
                   value={votePoints.most_fitting}
                   onChange={(e) =>
-                    handleChangeVotePointsField(
-                      "most_fitting",
-                      e.target.value
-                    )
+                    handleChangeVotePointsField("most_fitting", e.target.value)
                   }
                 />
               </Box>
@@ -1396,9 +1394,7 @@ export default function AdminRegaliClient({
                 flexDirection: { xs: "column", sm: "row" },
               }}
             >
-              <Typography variant="h6">
-                Categorie regalo e punteggi
-              </Typography>
+              <Typography variant="h6">Categorie regalo e punteggi</Typography>
 
               <Button
                 size="small"
@@ -1440,11 +1436,7 @@ export default function AdminRegaliClient({
                   {categoriesState.map((cat) => (
                     <TableRow key={cat.id} hover>
                       <TableCell>
-                        <Chip
-                          label={cat.code}
-                          size="small"
-                          sx={{ fontWeight: 600 }}
-                        />
+                        <Chip label={cat.code} size="small" sx={{ fontWeight: 600 }} />
                       </TableCell>
                       <TableCell>{cat.label}</TableCell>
                       <TableCell>
@@ -1504,26 +1496,17 @@ export default function AdminRegaliClient({
                 Assegna categoria di regalo ai partecipanti
               </Typography>
 
-              <FormControl
-                size="small"
-                sx={{ minWidth: { xs: "100%", sm: 200 } }}
-              >
+              <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 200 } }}>
                 <InputLabel id="filter-mode-label">Filtro</InputLabel>
                 <Select
                   labelId="filter-mode-label"
                   value={filterMode}
                   label="Filtro"
-                  onChange={(e) =>
-                    setFilterMode(e.target.value as FilterMode)
-                  }
+                  onChange={(e) => setFilterMode(e.target.value as FilterMode)}
                 >
                   <MenuItem value="all">Tutti i partecipanti</MenuItem>
-                  <MenuItem value="missing">
-                    Solo senza categoria assegnata
-                  </MenuItem>
-                  <MenuItem value="assigned">
-                    Solo con categoria assegnata
-                  </MenuItem>
+                  <MenuItem value="missing">Solo senza categoria assegnata</MenuItem>
+                  <MenuItem value="assigned">Solo con categoria assegnata</MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -1574,9 +1557,7 @@ export default function AdminRegaliClient({
                         >
                           <TableCell>
                             <Box>
-                              <Typography>
-                                {p.name ?? "(senza nome)"}
-                              </Typography>
+                              <Typography>{p.name ?? "(senza nome)"}</Typography>
                               <Typography
                                 variant="caption"
                                 sx={{ color: "rgba(148,163,184,0.9)" }}
@@ -1607,11 +1588,7 @@ export default function AdminRegaliClient({
                                 </MenuItem>
                                 {categoriesState.map((cat) => (
                                   <MenuItem key={cat.id} value={cat.id}>
-                                    {cat.label} (
-                                    {cat.points >= 0
-                                      ? `+${cat.points}`
-                                      : cat.points}{" "}
-                                    pt)
+                                    {cat.label} ({cat.points >= 0 ? `+${cat.points}` : cat.points} pt)
                                   </MenuItem>
                                 ))}
                               </Select>
@@ -1627,30 +1604,20 @@ export default function AdminRegaliClient({
                               onChange={(e) =>
                                 handleChangeBonus(p.owner_id, e.target.value)
                               }
-                              inputProps={{ style: { color: "white" } }}
                             />
                           </TableCell>
 
                           <TableCell>
                             {savingFor === p.owner_id ? (
-                              <Typography
-                                variant="caption"
-                                sx={{ color: "rgba(0, 0, 0, 1)" }}
-                              >
+                              <Typography variant="caption" sx={{ color: "rgba(0, 0, 0, 1)" }}>
                                 Salvataggio...
                               </Typography>
                             ) : hasCategory ? (
-                              <Typography
-                                variant="caption"
-                                sx={{ color: "rgba(52,211,153,1)" }}
-                              >
+                              <Typography variant="caption" sx={{ color: "rgba(52,211,153,1)" }}>
                                 Salvato
                               </Typography>
                             ) : (
-                              <Typography
-                                variant="caption"
-                                sx={{ color: "rgba(148,163,184,0.9)" }}
-                              >
+                              <Typography variant="caption" sx={{ color: "rgba(148,163,184,0.9)" }}>
                                 Nessuna categoria
                               </Typography>
                             )}
@@ -1674,9 +1641,7 @@ export default function AdminRegaliClient({
         fullWidth
       >
         <DialogTitle>
-          {categoryDialog.mode === "create"
-            ? "Nuova categoria"
-            : "Modifica categoria"}
+          {categoryDialog.mode === "create" ? "Nuova categoria" : "Modifica categoria"}
         </DialogTitle>
         <DialogContent dividers>
           <TextField
@@ -1732,17 +1697,13 @@ export default function AdminRegaliClient({
         <DialogTitle>Elimina categoria</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Vuoi davvero eliminare la categoria{" "}
-            <strong>{deleteTarget?.label}</strong>? Questa operazione non può
-            essere annullata. Se la categoria è già stata usata in qualche
+            Vuoi davvero eliminare la categoria <strong>{deleteTarget?.label}</strong>?
+            Questa operazione non può essere annullata. Se la categoria è già stata usata in qualche
             regalo, l&apos;eliminazione verrà bloccata.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={() => setDeleteTarget(null)}
-            disabled={deletingCategory}
-          >
+          <Button onClick={() => setDeleteTarget(null)} disabled={deletingCategory}>
             Annulla
           </Button>
           <Button

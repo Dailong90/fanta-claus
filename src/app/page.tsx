@@ -304,7 +304,7 @@ export default function HomePage() {
                       punti doppi. Attento, vale anche per i malus!
                     </Typography>
                     <Typography>
-                      • <strong>Termine utlimo anticipato!</strong> Hai tempo fino al{" "}
+                      • <strong>Termine utlimo anticipato! </strong> Hai tempo fino al{" "}
                       <strong>15 dicembre alle 12:30</strong> per modificare la
                       squadra.
                     </Typography>

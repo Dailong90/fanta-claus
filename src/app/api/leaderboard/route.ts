@@ -24,7 +24,7 @@ type CategoryRow = {
 type PlayerRow = {
   owner_id: string;
   name: string | null;
-  is_admin?: boolean | null;
+  is_admin: boolean | null;
 };
 
 type VoteType = "best_wrapping" | "worst_wrapping" | "most_fitting";
@@ -169,6 +169,15 @@ export async function GET(req: Request) {
     console.error("❌ Errore runtime lettura leaderboard_published", err);
   }
 
+  // ✅ regola: se NON pubblicato e NON admin → non mostriamo NESSUN punteggio ai profili
+  if (!isPublished && !admin) {
+    const response: LeaderboardResponse = {
+      teams: [],
+      isPublished: false,
+    };
+    return NextResponse.json(response, { status: 200 });
+  }
+
   // 🔒 regola: punti votazioni e dettagli visibili SOLO se pubblicato oppure admin
   const canRevealVoting = isPublished || admin;
 
@@ -188,7 +197,7 @@ export async function GET(req: Request) {
   // 2) Giocatori
   const { data: players, error: playersError } = await supabaseAdmin
     .from("players")
-    .select("owner_id, name");
+    .select("owner_id, name, is_admin");
 
   if (playersError || !players) {
     console.error("❌ Errore lettura players", playersError);
@@ -233,14 +242,14 @@ export async function GET(req: Request) {
   // 5) Config punti votazioni
   let votePointsConfig: VotePointsConfig = DEFAULT_VOTE_POINTS;
 
-  // ⚠️ se NON è pubblicato e NON admin, forziamo i punti votazioni a 0
   if (canRevealVoting) {
     try {
-      const { data: voteSettings, error: voteSettingsError } = await supabaseAdmin
-        .from("game_settings")
-        .select("value")
-        .eq("key", "vote_points")
-        .maybeSingle<{ value: Partial<VotePointsConfig> }>();
+      const { data: voteSettings, error: voteSettingsError } =
+        await supabaseAdmin
+          .from("game_settings")
+          .select("value")
+          .eq("key", "vote_points")
+          .maybeSingle<{ value: Partial<VotePointsConfig> }>();
 
       if (!voteSettingsError && voteSettings?.value) {
         votePointsConfig = {
@@ -376,7 +385,9 @@ export async function GET(req: Request) {
         const baseGift = giftScoreBySanta.get(mid) ?? 0;
 
         // ✅ punti votazioni SOLO se canRevealVoting
-        const voteBonus = canRevealVoting ? (votingBonusByPlayer.get(mid) ?? 0) : 0;
+        const voteBonus = canRevealVoting
+          ? votingBonusByPlayer.get(mid) ?? 0
+          : 0;
 
         const basePts = baseGift + voteBonus;
 

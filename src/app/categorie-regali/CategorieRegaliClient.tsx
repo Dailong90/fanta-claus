@@ -119,6 +119,7 @@ export default function CategorieRegaliClient() {
             sx={{ mb: 3, color: fantaPalette.textSecondary }}
           >
             Qui trovi tutte le categorie con i rispettivi punti.
+            Ad ogni regalo possono essere assegnati un bonus ed un malus. Nel caso il regali rientri in più categorie verrà assegnata la categoria con il valore maggiore.
           </Typography>
 
           {loading ? (

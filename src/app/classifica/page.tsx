@@ -113,7 +113,7 @@ export default function ClassificaPage() {
         setAwardsLoading(true);
         setAwardsError(null);
 
-        const res = await fetch("/api/awards");
+        const res = await fetch("api/admin/awards");
         if (!res.ok) {
           throw new Error("Errore nel recupero dei premi speciali");
         }

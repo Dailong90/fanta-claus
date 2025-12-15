@@ -16,12 +16,6 @@ type AwardsSummary = {
   most_fitting: AwardWinner[];
 };
 
-const EMPTY: AwardsSummary = {
-  best_wrapping: [],
-  worst_wrapping: [],
-  most_fitting: [],
-};
-
 // 🔹 ricava il nome del partecipante da participants.ts
 function findParticipantName(ownerId: string): string {
   const list = participants as { id: string; name: string }[];
@@ -30,34 +24,13 @@ function findParticipantName(ownerId: string): string {
 }
 
 export async function GET() {
-  // ✅ Gate: premi speciali visibili solo quando la classifica è pubblicata
-  const { data: pubRow, error: pubErr } = await supabaseAdmin
-    .from("game_settings")
-    .select("value")
-    .eq("key", "leaderboard_published")
-    .maybeSingle<{ value: { published?: boolean } }>();
-
-  if (pubErr) {
-    console.error("❌ Errore lettura leaderboard_published", pubErr);
-    return NextResponse.json(
-      { error: "Errore lettura stato pubblicazione." },
-      { status: 500 }
-    );
-  }
-
-  const published = pubRow?.value?.published === true;
-  if (!published) {
-    // non riveliamo nulla finché non viene pubblicata la classifica
-    return NextResponse.json(EMPTY, { status: 200 });
-  }
-
-  // leggiamo TUTTI i voti dalla tabella package_votes
+  // 🔓 ADMIN: vediamo SEMPRE i voti, anche se non pubblicati
   const { data, error } = await supabaseAdmin
     .from("package_votes")
     .select("target_owner_id, vote_type");
 
   if (error) {
-    console.error("❌ Errore lettura voti speciali", error);
+    console.error("❌ Errore lettura voti speciali (admin)", error);
     return NextResponse.json(
       { error: "Errore lettura voti speciali" },
       { status: 500 }
@@ -67,7 +40,6 @@ export async function GET() {
   const rows =
     (data as { target_owner_id: string; vote_type: VoteType }[]) ?? [];
 
-  // counts[category][ownerId] = numero voti
   const counts: Record<VoteType, Record<string, number>> = {
     best_wrapping: {},
     worst_wrapping: {},
@@ -83,7 +55,7 @@ export async function GET() {
   }
 
   function pickWinners(cat: VoteType): AwardWinner[] {
-    const entries = Object.entries(counts[cat]);
+    const entries = Object.entries(counts[cat]); // [ownerId, votes]
     if (entries.length === 0) return [];
 
     let maxVotes = 0;

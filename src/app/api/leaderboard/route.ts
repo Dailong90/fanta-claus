@@ -121,7 +121,6 @@ async function isAdminRequest(req: Request): Promise<boolean> {
 }
 
 function readPublishedFlag(value: unknown): boolean {
-  // default false se non troviamo nulla
   if (typeof value === "boolean") return value;
 
   if (typeof value === "string") {
@@ -141,11 +140,42 @@ function readPublishedFlag(value: unknown): boolean {
   return false;
 }
 
+function buildZeroLeaderboard(params: {
+  teams: TeamRow[];
+  playerNameMap: Map<string, string>;
+}): LeaderboardTeam[] {
+  const { teams, playerNameMap } = params;
+
+  // NON sortiamo per punti (sono tutti 0): manteniamo un ordine stabile per ownerName
+  return teams
+    .map<LeaderboardTeam | null>((t) => {
+      const members = t.members ?? [];
+      if (!Array.isArray(members) || members.length === 0) return null;
+
+      const captainId = t.captain_id ?? null;
+
+      const membersDetailed: MemberScore[] = members.map((mid) => ({
+        id: mid,
+        name: playerNameMap.get(mid) ?? mid,
+        points: 0,
+        isCaptain: captainId === mid,
+      }));
+
+      return {
+        ownerId: t.owner_id,
+        ownerName: playerNameMap.get(t.owner_id) ?? t.owner_id,
+        totalPoints: 0,
+        members: membersDetailed,
+      };
+    })
+    .filter((t): t is LeaderboardTeam => t !== null)
+    .sort((a, b) => a.ownerName.localeCompare(b.ownerName, "it"));
+}
+
 export async function GET(req: Request) {
-  // ✅ admin può vedere tutto anche se non pubblicato
   const admin = await isAdminRequest(req);
 
-  // 0) Flag "classifica pubblicata?" da game_settings.leaderboard_published
+  // 0) Flag "classifica pubblicata?"
   let isPublished = false;
 
   try {
@@ -169,19 +199,7 @@ export async function GET(req: Request) {
     console.error("❌ Errore runtime lettura leaderboard_published", err);
   }
 
-  // ✅ regola: se NON pubblicato e NON admin → non mostriamo NESSUN punteggio ai profili
-  if (!isPublished && !admin) {
-    const response: LeaderboardResponse = {
-      teams: [],
-      isPublished: false,
-    };
-    return NextResponse.json(response, { status: 200 });
-  }
-
-  // 🔒 regola: punti votazioni e dettagli visibili SOLO se pubblicato oppure admin
-  const canRevealVoting = isPublished || admin;
-
-  // 1) Squadre
+  // 1) Squadre (servono SEMPRE per mostrare i membri)
   const { data: teams, error: teamsError } = await supabaseAdmin
     .from("teams")
     .select("owner_id, members, captain_id");
@@ -194,7 +212,7 @@ export async function GET(req: Request) {
     );
   }
 
-  // 2) Giocatori
+  // 2) Giocatori (nomi)
   const { data: players, error: playersError } = await supabaseAdmin
     .from("players")
     .select("owner_id, name, is_admin");
@@ -207,11 +225,28 @@ export async function GET(req: Request) {
     );
   }
 
-  // mappa id -> nome
   const playerNameMap = new Map<string, string>();
   (players as PlayerRow[]).forEach((p) => {
     playerNameMap.set(p.owner_id, p.name ?? p.owner_id);
   });
+
+  // ✅ Se NON pubblicato e NON admin: mostra squadre e membri, ma punti=0
+  if (!isPublished && !admin) {
+    const zeroTeams = buildZeroLeaderboard({
+      teams: teams as TeamRow[],
+      playerNameMap,
+    });
+
+    const response: LeaderboardResponse = {
+      teams: zeroTeams,
+      isPublished: false,
+    };
+
+    return NextResponse.json(response, { status: 200 });
+  }
+
+  // Da qui in poi: pubblicato OPPURE admin → calcolo punteggi reali
+  const canRevealVoting = isPublished || admin;
 
   // 3) Regali
   const { data: gifts, error: giftsError } = await supabaseAdmin
@@ -263,7 +298,7 @@ export async function GET(req: Request) {
     }
   }
 
-  // 6) Voti (tabella: package_votes)
+  // 6) Voti
   const { data: votes, error: votesError } = await supabaseAdmin
     .from("package_votes")
     .select("voter_owner_id, target_owner_id, vote_type");
@@ -280,7 +315,6 @@ export async function GET(req: Request) {
   if (!votesError && votes) {
     const voteRows = votes as VoteRow[];
 
-    // Conta i voti per tipo/target
     const counts: Record<VoteType, Record<string, number>> = {
       best_wrapping: {},
       worst_wrapping: {},
@@ -294,11 +328,8 @@ export async function GET(req: Request) {
       const targetId = v.target_owner_id;
       const voterId = v.voter_owner_id;
 
-      // conteggio per i vincitori
-      const current = counts[normalized][targetId] ?? 0;
-      counts[normalized][targetId] = current + 1;
+      counts[normalized][targetId] = (counts[normalized][targetId] ?? 0) + 1;
 
-      // dettaglio voto singolo (solo se canRevealVoting)
       if (canRevealVoting) {
         const perVotePoints = votePointsConfig[normalized];
         votingDetails[normalized].push({
@@ -319,8 +350,7 @@ export async function GET(req: Request) {
 
     (["best_wrapping", "worst_wrapping", "most_fitting"] as VoteType[]).forEach(
       (type) => {
-        const mapForType = counts[type];
-        const entries = Object.entries(mapForType);
+        const entries = Object.entries(counts[type]);
         if (entries.length === 0) return;
 
         const maxVotes = entries.reduce(
@@ -333,10 +363,11 @@ export async function GET(req: Request) {
           .map(([targetId, value]) => {
             const pointsAwarded = votePointsConfig[type];
 
-            // ✅ bonus al giocatore vincitore SOLO se canRevealVoting
             if (canRevealVoting) {
-              const prev = votingBonusByPlayer.get(targetId) ?? 0;
-              votingBonusByPlayer.set(targetId, prev + pointsAwarded);
+              votingBonusByPlayer.set(
+                targetId,
+                (votingBonusByPlayer.get(targetId) ?? 0) + pointsAwarded
+              );
             }
 
             return {
@@ -351,10 +382,7 @@ export async function GET(req: Request) {
       }
     );
 
-    // ✅ winners visibili SOLO se canRevealVoting
-    if (canRevealVoting) {
-      votingWinners = winnersResult;
-    }
+    if (canRevealVoting) votingWinners = winnersResult;
   } else if (votesError) {
     console.error("❌ Errore lettura package_votes", votesError);
   }
@@ -383,11 +411,7 @@ export async function GET(req: Request) {
 
       const membersDetailed: MemberScore[] = members.map((mid) => {
         const baseGift = giftScoreBySanta.get(mid) ?? 0;
-
-        // ✅ punti votazioni SOLO se canRevealVoting
-        const voteBonus = canRevealVoting
-          ? votingBonusByPlayer.get(mid) ?? 0
-          : 0;
+        const voteBonus = canRevealVoting ? votingBonusByPlayer.get(mid) ?? 0 : 0;
 
         const basePts = baseGift + voteBonus;
 
@@ -419,7 +443,6 @@ export async function GET(req: Request) {
     isPublished,
   };
 
-  // ✅ info votazioni SOLO se pubblicato o admin
   if (canRevealVoting) {
     response.voting = votingWinners;
     response.votingDetails = votingDetails;

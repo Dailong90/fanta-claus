@@ -69,9 +69,9 @@ type VoteType = "best_wrapping" | "worst_wrapping" | "most_fitting";
 type VoteState = Record<VoteType, string | null>;
 
 const VOTE_LABELS: Record<VoteType, string> = {
-  best_wrapping: "Pacco meglio realizzato +3",
-  worst_wrapping: "Pacco peggio realizzato -3",
-  most_fitting: "Pacco più azzeccato +5",
+  best_wrapping: "Pacco meglio realizzato +5",
+  worst_wrapping: "Pacco peggio realizzato -5",
+  most_fitting: "Pacco più azzeccato +10",
 };
 
 type VotingPanelProps = {

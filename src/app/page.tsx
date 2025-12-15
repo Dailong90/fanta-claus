@@ -304,18 +304,15 @@ export default function HomePage() {
                       punti doppi. Attento, vale anche per i malus!
                     </Typography>
                     <Typography>
-                      • Hai tempo fino al{" "}
-                      <strong>15 dicembre alle 13:00</strong> per modificare la
+                      • <strong>Termine utlimo anticipato!</strong> Hai tempo fino al{" "}
+                      <strong>15 dicembre alle 12:30</strong> per modificare la
                       squadra.
                     </Typography>
                     <Typography>
                       • Ogni componente della squadra guadagna punti in base al{" "}
                       <strong>tipo di regalo</strong> che riceve.
                     </Typography>
-                    <Typography>
-                      • I punti assegnati per le tipologie dei regali verranno
-                      comunicati il <strong>15 dicembre alle 14:00</strong>.
-                    </Typography>
+                    
                     <Typography>
                       • Dopo l&apos;apertura dei pacchi torna sul tuo profilo per
                       votare le tre categorie: pacco meglio realizzato, pacco

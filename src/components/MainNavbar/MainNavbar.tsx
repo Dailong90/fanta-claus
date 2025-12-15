@@ -102,6 +102,7 @@ export default function MainNavbar() {
   if (auth.isLoggedIn) {
     navItems.push(
       { label: "Classifica", href: "/classifica" },
+      { label: "Categorie Regali", href: "/categorie-regali" },
       { label: "Profilo", href: "/profilo" }
     );
 

@@ -94,7 +94,35 @@ export default function HomePage() {
     router.push("/login");
   };
 
+  const handleGoToCategories = () => {
+    // pagina visibile solo ai loggati → se non loggato mando al login
+    if (typeof window !== "undefined") {
+      const ownerId = window.localStorage.getItem("fanta_owner_id");
+      if (!ownerId) {
+        router.push("/login");
+        return;
+      }
+    }
+    router.push("/categorie-regali");
+  };
+
   const showPodium = !publishedLoading && published === true;
+
+  const ctaButtonSx = {
+    textTransform: "none",
+    fontWeight: 600,
+    px: 4,
+    py: 1.2,
+    borderRadius: 999,
+    backgroundImage: fantaPalette.buttonGradient,
+    color: fantaPalette.buttonText,
+    boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
+    width: { xs: "100%", sm: "auto" },
+    "&:hover": {
+      backgroundImage: fantaPalette.buttonGradientHover,
+      boxShadow: "0 12px 30px rgba(0,0,0,0.3)",
+    },
+  } as const;
 
   return (
     <Box
@@ -135,32 +163,34 @@ export default function HomePage() {
             boxShadow: fantaPalette.cardShadow,
           }}
         >
-          {/* 🔸 Se classifica pubblicata: mostriamo SOLO bottone + nota */}
+          {/* 🔸 Se classifica pubblicata: mostriamo SOLO bottoni + nota */}
           {showPodium ? (
             <Stack spacing={1} alignItems="center">
-              {/* CTA LOGIN */}
-              <Box sx={{ mt: 1 }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  onClick={handleGoToLogin}
-                  sx={{
-                    textTransform: "none",
-                    fontWeight: 600,
-                    px: 4,
-                    py: 1.2,
-                    borderRadius: 999,
-                    backgroundImage: fantaPalette.buttonGradient,
-                    color: fantaPalette.buttonText,
-                    boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
-                    "&:hover": {
-                      backgroundImage: fantaPalette.buttonGradientHover,
-                      boxShadow: "0 12px 30px rgba(0,0,0,0.3)",
-                    },
-                  }}
+              {/* CTA BOTTONI */}
+              <Box sx={{ mt: 1, width: "100%" }}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.5}
+                  sx={{ width: "100%", justifyContent: "center" }}
                 >
-                  Entra con il tuo codice
-                </Button>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={handleGoToLogin}
+                    sx={ctaButtonSx}
+                  >
+                    Entra con il tuo codice
+                  </Button>
+
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={handleGoToCategories}
+                    sx={ctaButtonSx}
+                  >
+                    Categorie regalo
+                  </Button>
+                </Stack>
               </Box>
 
               {/* NOTA SEMPLICE */}
@@ -347,29 +377,31 @@ export default function HomePage() {
                 </Box>
               )}
 
-              {/* CTA LOGIN */}
-              <Box sx={{ mt: 2 }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  onClick={handleGoToLogin}
-                  sx={{
-                    textTransform: "none",
-                    fontWeight: 600,
-                    px: 4,
-                    py: 1.2,
-                    borderRadius: 999,
-                    backgroundImage: fantaPalette.buttonGradient,
-                    color: fantaPalette.buttonText,
-                    boxShadow: "0 10px 25px rgba(0,0,0,0.25)",
-                    "&:hover": {
-                      backgroundImage: fantaPalette.buttonGradientHover,
-                      boxShadow: "0 12px 30px rgba(0,0,0,0.3)",
-                    },
-                  }}
+              {/* CTA BOTTONI */}
+              <Box sx={{ mt: 2, width: "100%" }}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.5}
+                  sx={{ width: "100%", justifyContent: "center" }}
                 >
-                  Entra con il tuo codice
-                </Button>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={handleGoToLogin}
+                    sx={ctaButtonSx}
+                  >
+                    Entra con il tuo codice
+                  </Button>
+
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={handleGoToCategories}
+                    sx={ctaButtonSx}
+                  >
+                    Categorie regalo
+                  </Button>
+                </Stack>
               </Box>
 
               {/* NOTA SEMPLICE */}

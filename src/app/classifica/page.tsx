@@ -283,7 +283,7 @@ export default function ClassificaPage() {
             variant="subtitle1"
             sx={{ mb: 3, color: fantaPalette.textSecondary }}
           >
-            Punteggi calcolati in base ai regali fatti dai membri di ogni
+            Punteggi calcolati in base ai regali ricevuti dai membri di ogni
             squadra. Le prime posizioni sono contrassegnate dai pacchi oro,
             argento e bronzo.
           </Typography>

@@ -7,6 +7,7 @@ import ConditionalNavbar from "@/components/ConditionalNavbar";
 export const metadata: Metadata = {
   title: "Fanta Claus",
   description: "Gioco di Natale aziendale",
+  referrer: "no-referrer",
 };
 
 export default function RootLayout({

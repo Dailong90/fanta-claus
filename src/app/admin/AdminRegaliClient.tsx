@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { parseGiftResponse } from "@/lib/contracts";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -164,7 +165,11 @@ export default function AdminRegaliClient({
   // 🔹 Regali
   const [giftMap, setGiftMap] = useState<GiftMap>({});
   const [loadingGifts, setLoadingGifts] = useState(true);
-  const [savingFor, setSavingFor] = useState<string | null>(null);
+  const [giftStates, setGiftStates] = useState<Record<string, "saving" | "saved" | "error">>({});
+  const [giftsReady, setGiftsReady] = useState(false);
+  const [giftsError, setGiftsError] = useState<string | null>(null);
+  const giftBusy = useRef(new Set<string>());
+  const confirmedGifts = useRef<GiftMap>({});
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
   // 🔹 Dialog gestione categorie
@@ -216,27 +221,19 @@ export default function AdminRegaliClient({
   });
   const [votePointsLoading, setVotePointsLoading] = useState(false);
   const [votePointsSaving, setVotePointsSaving] = useState(false);
+  const [votePointsReady, setVotePointsReady] = useState(false);
 
   // 🔹 Scadenza squadre
   const [deadlineIso, setDeadlineIso] = useState<string | null>(null);
   const [deadlineInput, setDeadlineInput] = useState<string>("");
   const [deadlineLoading, setDeadlineLoading] = useState(false);
   const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [deadlineReady, setDeadlineReady] = useState(false);
 
   const deadlineLabel = useMemo(
     () => formatDeadlineLabel(deadlineIso),
     [deadlineIso]
   );
-
-  // 🔹 Reset dati di gioco (squadre + voti)
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetMessage, setResetMessage] = useState<string | null>(null);
-  const [resetError, setResetError] = useState<string | null>(null);
-
-  // se il server aggiorna le categorie, aggiorno lo stato locale
-  useEffect(() => {
-    setCategoriesState(categories);
-  }, [categories]);
 
   // Carica i gift esistenti da /api/admin/gifts
   useEffect(() => {
@@ -245,7 +242,7 @@ export default function AdminRegaliClient({
         const res = await fetch("/api/admin/gifts");
         if (!res.ok) {
           console.error("Errore caricamento gifts", await res.text());
-          setLoadingGifts(false);
+          setGiftsError("Impossibile caricare i regali. Ricarica la pagina prima di modificarli.");
           return;
         }
         const data = (await res.json()) as { gifts: GiftRow[] };
@@ -256,9 +253,12 @@ export default function AdminRegaliClient({
             bonus_points: g.bonus_points ?? 0,
           };
         });
+        confirmedGifts.current = map;
         setGiftMap(map);
+        setGiftsReady(true);
       } catch (err) {
         console.error("Eccezione caricamento gifts", err);
+        setGiftsError("Impossibile caricare i regali. Ricarica la pagina.");
       } finally {
         setLoadingGifts(false);
       }
@@ -300,6 +300,7 @@ export default function AdminRegaliClient({
           votePoints: VotePointsConfig;
         };
         setVotePoints(json.votePoints);
+        setVotePointsReady(true);
       } catch (err) {
         console.error("Errore rete vote-points", err);
       } finally {
@@ -322,6 +323,7 @@ export default function AdminRegaliClient({
         }
         const json = (await res.json()) as { deadlineIso: string | null };
         setDeadlineIso(json.deadlineIso);
+        setDeadlineReady(true);
         setDeadlineInput(
           json.deadlineIso ? isoToLocalInput(json.deadlineIso) : ""
         );
@@ -360,84 +362,38 @@ export default function AdminRegaliClient({
     [players, giftMap, filterMode]
   );
 
-  const saveGift = async (
-    santa_owner_id: string,
-    category_id: string,
-    bonus_points: number
-  ) => {
-    if (!category_id) return;
-
+  const saveGift = async (ownerId: string, patch: { category_id?: string; bonus_points?: number }) => {
+    if (!giftsReady || giftBusy.current.has(ownerId)) return;
+    giftBusy.current.add(ownerId);
+    setGiftStates(current => ({ ...current, [ownerId]: "saving" }));
+    setGiftsError(null);
     try {
-      setSavingFor(santa_owner_id);
       const res = await fetch("/api/admin/gifts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          santa_owner_id,
-          category_id,
-          bonus_points,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ santa_owner_id: ownerId, ...patch }),
       });
-
-      if (!res.ok) {
-        console.error(
-          "Errore salvataggio gift per",
-          santa_owner_id,
-          await res.text()
-        );
-      }
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? "Errore salvataggio regalo.");
+      const saved = parseGiftResponse(result);
+      confirmedGifts.current = { ...confirmedGifts.current, [ownerId]: saved };
+      setGiftMap(current => ({ ...current, [ownerId]: saved }));
+      setGiftStates(current => ({ ...current, [ownerId]: "saved" }));
     } catch (err) {
-      console.error("Eccezione salvataggio gift per", santa_owner_id, err);
-    } finally {
-      setSavingFor(null);
-    }
+      const previous = confirmedGifts.current[ownerId] ?? { category_id: "", bonus_points: 0 };
+      setGiftMap(current => ({ ...current, [ownerId]: previous }));
+      setGiftStates(current => ({ ...current, [ownerId]: "error" }));
+      setGiftsError(err instanceof Error ? err.message : "Errore salvataggio. Riprova la modifica.");
+    } finally { giftBusy.current.delete(ownerId); }
   };
-
-  const handleChangeCategory = (
-    santa_owner_id: string,
-    category_id: string
-  ) => {
-    setGiftMap((prev) => {
-      const prevGift = prev[santa_owner_id] ?? {
-        category_id: "",
-        bonus_points: 0,
-      };
-      const updated: GiftMap = {
-        ...prev,
-        [santa_owner_id]: {
-          category_id,
-          bonus_points: prevGift.bonus_points,
-        },
-      };
-      void saveGift(santa_owner_id, category_id, prevGift.bonus_points);
-      return updated;
-    });
+  const handleChangeCategory = (ownerId: string, categoryId: string) => {
+    if (!categoryId || giftBusy.current.has(ownerId)) return;
+    void saveGift(ownerId, { category_id: categoryId });
   };
-
-  const handleChangeBonus = (santa_owner_id: string, bonusStr: string) => {
-    const bonus = Number.isFinite(Number(bonusStr)) ? Number(bonusStr) : 0;
-
-    setGiftMap((prev) => {
-      const prevGift = prev[santa_owner_id] ?? {
-        category_id: "",
-        bonus_points: 0,
-      };
-      const updatedGift = {
-        category_id: prevGift.category_id,
-        bonus_points: bonus,
-      };
-
-      const updated: GiftMap = {
-        ...prev,
-        [santa_owner_id]: updatedGift,
-      };
-
-      if (updatedGift.category_id) {
-        void saveGift(santa_owner_id, updatedGift.category_id, bonus);
-      }
-
-      return updated;
-    });
+  const handleChangeBonus = (ownerId: string, raw: string) => {
+    const bonus = Number(raw);
+    if (!Number.isFinite(bonus) || giftBusy.current.has(ownerId)) return;
+    setGiftMap(current => ({ ...current, [ownerId]: { ...current[ownerId], bonus_points: bonus } }));
+    setGiftStates(current => ({ ...current, [ownerId]: "error" }));
   };
 
   // ──────────────────────────────────────────────
@@ -570,6 +526,7 @@ export default function AdminRegaliClient({
   };
 
   const handleSaveVotePoints = async () => {
+    if (!votePointsReady) return;
     setVotePointsSaving(true);
     try {
       const res = await fetch("/api/admin/vote-points", {
@@ -599,6 +556,7 @@ export default function AdminRegaliClient({
   // ──────────────────────────────────────────────
 
   const handleSaveDeadline = async () => {
+    if (!deadlineReady) return;
     setDeadlineSaving(true);
     try {
       const iso =
@@ -638,15 +596,7 @@ export default function AdminRegaliClient({
     setLeaderboardError(null);
 
     try {
-      // 🔐 admin: passiamo owner_id per poter vedere votazioni anche se non pubbliche
-      const ownerId =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem("fanta_owner_id")
-          : null;
-
-      const res = await fetch("/api/leaderboard", {
-        headers: ownerId ? { "x-fanta-owner-id": ownerId } : undefined,
-      });
+      const res = await fetch("/api/leaderboard?preview=1", { cache: "no-store" });
 
       if (!res.ok) {
         setLeaderboardError("Errore nel caricamento della classifica.");
@@ -751,48 +701,6 @@ export default function AdminRegaliClient({
       alert("Errore inatteso nel nascondere la classifica.");
     } finally {
       setUnpublishLoading(false);
-    }
-  };
-
-  // 🔹 Reset squadre + voti speciali
-  const handleResetGame = async () => {
-    const conferma = window.confirm(
-      "Sei sicuro di voler pulire TUTTE le squadre e TUTTI i voti delle votazioni speciali?\n\nQuesta operazione non è reversibile."
-    );
-    if (!conferma) return;
-
-    try {
-      setResetLoading(true);
-      setResetMessage(null);
-      setResetError(null);
-
-      const res = await fetch("/api/admin/reset-game", { method: "POST" });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const msg = data?.error ?? "Errore nel reset dei dati di gioco.";
-        setResetError(msg);
-        alert(msg);
-        return;
-      }
-
-      const data = await res.json().catch(() => null);
-      const msg =
-        data?.message ??
-        "Reset completato: squadre e voti sono stati azzerati.";
-      setResetMessage(msg);
-      alert(msg);
-
-      setGiftMap({});
-      setLeaderboardPreview(null);
-      setLeaderboardVoting(null);
-      setLeaderboardVotesDetail([]);
-    } catch (err) {
-      console.error("Errore chiamata reset-game", err);
-      setResetError("Errore di rete durante il reset.");
-      alert("Errore di rete durante il reset.");
-    } finally {
-      setResetLoading(false);
     }
   };
 
@@ -1332,46 +1240,9 @@ export default function AdminRegaliClient({
             )}
           </Paper>
 
-          {/* RESET DATI DI GIOCO (SQUADRE + VOTI) */}
-          <Paper
-            sx={{
-              p: { xs: 2, sm: 2.5 },
-              bgcolor: "rgba(254,226,226,0.8)",
-              borderRadius: 3,
-              border: "1px solid rgba(248,113,113,0.9)",
-            }}
-          >
-            <Typography variant="h6" sx={{ color: "#b91c1c", mb: 1 }}>
-              Reset dati di gioco
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#7f1d1d", mb: 2 }}>
-              Questa azione cancella tutte le squadre create finora e tutti i
-              voti delle votazioni speciali. I profili dei partecipanti e le
-              impostazioni generali (deadline, punti voti, ecc.) non vengono
-              toccati.
-            </Typography>
-
-            <Button
-              variant="contained"
-              color="error"
-              onClick={handleResetGame}
-              disabled={resetLoading}
-              sx={{ textTransform: "none", borderRadius: 999 }}
-            >
-              {resetLoading ? "Pulizia in corso..." : "Pulisci squadre e voti"}
-            </Button>
-
-            {resetMessage && (
-              <Typography variant="body2" sx={{ mt: 1.5, color: "#166534" }}>
-                {resetMessage}
-              </Typography>
-            )}
-
-            {resetError && (
-              <Typography variant="body2" sx={{ mt: 1, color: "#b91c1c" }}>
-                {resetError}
-              </Typography>
-            )}
+          <Paper sx={{ p: 2, borderRadius: 3 }}>
+            <Typography variant="h6">Reset globale disabilitato</Typography>
+            <Typography variant="body2">La cancellazione globale è sospesa per proteggere i dati storici. Le nuove edizioni richiedono operazioni isolate e atomiche.</Typography>
           </Paper>
 
           {/* CATEGORIE REGALO E PUNTEGGI */}
@@ -1511,6 +1382,7 @@ export default function AdminRegaliClient({
               </FormControl>
             </Box>
 
+            {giftsError && <Typography role="alert" color="error" sx={{ my: 2 }}>{giftsError}</Typography>}
             {loadingGifts ? (
               <Box sx={{ py: 4, textAlign: "center" }}>
                 <CircularProgress size={28} />
@@ -1576,6 +1448,7 @@ export default function AdminRegaliClient({
                                 labelId={`cat-label-${p.owner_id}`}
                                 label="Categoria"
                                 value={gift.category_id}
+                                disabled={!giftsReady || giftStates[p.owner_id] === "saving"}
                                 onChange={(e) =>
                                   handleChangeCategory(
                                     p.owner_id,
@@ -1583,8 +1456,8 @@ export default function AdminRegaliClient({
                                   )
                                 }
                               >
-                                <MenuItem value="">
-                                  <em>Nessuna</em>
+                                <MenuItem value="" disabled>
+                                  <em>Seleziona una categoria</em>
                                 </MenuItem>
                                 {categoriesState.map((cat) => (
                                   <MenuItem key={cat.id} value={cat.id}>
@@ -1601,6 +1474,10 @@ export default function AdminRegaliClient({
                               type="number"
                               label="Bonus"
                               value={gift.bonus_points}
+                              disabled={!giftsReady || !gift.category_id || giftStates[p.owner_id] === "saving"}
+                              onBlur={() => {
+                                if (gift.category_id && gift.bonus_points !== confirmedGifts.current[p.owner_id]?.bonus_points) void saveGift(p.owner_id, { bonus_points: gift.bonus_points });
+                              }}
                               onChange={(e) =>
                                 handleChangeBonus(p.owner_id, e.target.value)
                               }
@@ -1608,10 +1485,12 @@ export default function AdminRegaliClient({
                           </TableCell>
 
                           <TableCell>
-                            {savingFor === p.owner_id ? (
+                            {giftStates[p.owner_id] === "saving" ? (
                               <Typography variant="caption" sx={{ color: "rgba(0, 0, 0, 1)" }}>
                                 Salvataggio...
                               </Typography>
+                            ) : giftStates[p.owner_id] === "error" ? (
+                              <Typography variant="caption" color="error">Modifica non confermata</Typography>
                             ) : hasCategory ? (
                               <Typography variant="caption" sx={{ color: "rgba(52,211,153,1)" }}>
                                 Salvato

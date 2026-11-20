@@ -1,0 +1,31 @@
+table_name,column_name,data_type,is_nullable,column_default
+game_settings,key,text,NO,null
+game_settings,value,jsonb,NO,null
+gift_assignments,giver_id,text,NO,null
+gift_assignments,category_id,text,YES,null
+gift_categories,id,uuid,NO,gen_random_uuid()
+gift_categories,code,text,NO,null
+gift_categories,label,text,NO,null
+gift_categories,points,integer,NO,null
+gift_categories,description,text,YES,null
+gifts,id,uuid,NO,gen_random_uuid()
+gifts,santa_owner_id,text,NO,null
+gifts,receiver_owner_id,text,YES,null
+gifts,category_id,uuid,NO,null
+gifts,bonus_points,integer,NO,0
+gifts,notes,text,YES,null
+gifts,created_at,timestamp with time zone,NO,now()
+package_votes,id,uuid,NO,gen_random_uuid()
+package_votes,voter_owner_id,text,NO,null
+package_votes,target_owner_id,text,NO,null
+package_votes,vote_type,text,NO,null
+package_votes,created_at,timestamp with time zone,NO,now()
+players,owner_id,text,NO,null
+players,name,text,NO,null
+players,access_code,text,NO,null
+players,created_at,timestamp with time zone,YES,now()
+players,display_name,text,YES,null
+players,is_admin,boolean,NO,false
+teams,owner_id,text,NO,null
+teams,members,ARRAY,NO,'{}'::text[]
+teams,captain_id,text,YES,null

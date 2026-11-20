@@ -1,0 +1,58 @@
+tipo,tabella,dettagli
+CONSTRAINT,game_settings,game_settings_pkey: PRIMARY KEY (key)
+GRANT,game_settings,"anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,game_settings,"authenticated: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,game_settings,"service_role: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+INDEX,game_settings,CREATE UNIQUE INDEX game_settings_pkey ON public.game_settings USING btree (key)
+RLS,game_settings,"enabled=false, forced=false"
+CONSTRAINT,gift_assignments,gift_assignments_pkey: PRIMARY KEY (giver_id)
+GRANT,gift_assignments,"anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,gift_assignments,"authenticated: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,gift_assignments,"service_role: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+INDEX,gift_assignments,CREATE UNIQUE INDEX gift_assignments_pkey ON public.gift_assignments USING btree (giver_id)
+RLS,gift_assignments,"enabled=false, forced=false"
+CONSTRAINT,gift_categories,gift_categories_code_key: UNIQUE (code)
+CONSTRAINT,gift_categories,gift_categories_pkey: PRIMARY KEY (id)
+GRANT,gift_categories,"anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,gift_categories,"authenticated: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,gift_categories,"service_role: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+INDEX,gift_categories,CREATE UNIQUE INDEX gift_categories_code_key ON public.gift_categories USING btree (code)
+INDEX,gift_categories,CREATE UNIQUE INDEX gift_categories_pkey ON public.gift_categories USING btree (id)
+RLS,gift_categories,"enabled=false, forced=false"
+CONSTRAINT,gifts,gifts_category_id_fkey: FOREIGN KEY (category_id) REFERENCES gift_categories(id) ON DELETE RESTRICT
+CONSTRAINT,gifts,gifts_pkey: PRIMARY KEY (id)
+CONSTRAINT,gifts,gifts_receiver_owner_id_fkey: FOREIGN KEY (receiver_owner_id) REFERENCES players(owner_id) ON DELETE SET NULL
+CONSTRAINT,gifts,gifts_santa_owner_id_fkey: FOREIGN KEY (santa_owner_id) REFERENCES players(owner_id) ON DELETE CASCADE
+CONSTRAINT,gifts,gifts_santa_owner_unique: UNIQUE (santa_owner_id)
+GRANT,gifts,"anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,gifts,"authenticated: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,gifts,"service_role: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+INDEX,gifts,CREATE UNIQUE INDEX gifts_pkey ON public.gifts USING btree (id)
+INDEX,gifts,CREATE UNIQUE INDEX gifts_santa_owner_unique ON public.gifts USING btree (santa_owner_id)
+RLS,gifts,"enabled=false, forced=false"
+CONSTRAINT,package_votes,package_votes_pkey: PRIMARY KEY (id)
+CONSTRAINT,package_votes,package_votes_target_owner_id_fkey: FOREIGN KEY (target_owner_id) REFERENCES players(owner_id) ON DELETE CASCADE
+CONSTRAINT,package_votes,"package_votes_vote_type_check: CHECK ((vote_type = ANY (ARRAY['best_wrapping'::text, 'worst_wrapping'::text, 'most_fitting'::text])))"
+CONSTRAINT,package_votes,package_votes_voter_owner_id_fkey: FOREIGN KEY (voter_owner_id) REFERENCES players(owner_id) ON DELETE CASCADE
+CONSTRAINT,package_votes,"package_votes_voter_owner_id_vote_type_key: UNIQUE (voter_owner_id, vote_type)"
+GRANT,package_votes,"anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,package_votes,"authenticated: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,package_votes,"service_role: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+INDEX,package_votes,CREATE UNIQUE INDEX package_votes_pkey ON public.package_votes USING btree (id)
+INDEX,package_votes,"CREATE UNIQUE INDEX package_votes_voter_owner_id_vote_type_key ON public.package_votes USING btree (voter_owner_id, vote_type)"
+RLS,package_votes,"enabled=false, forced=false"
+CONSTRAINT,players,players_access_code_key: UNIQUE (access_code)
+CONSTRAINT,players,players_pkey: PRIMARY KEY (owner_id)
+GRANT,players,"anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,players,"authenticated: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,players,"service_role: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+INDEX,players,CREATE UNIQUE INDEX players_access_code_key ON public.players USING btree (access_code)
+INDEX,players,CREATE UNIQUE INDEX players_pkey ON public.players USING btree (owner_id)
+RLS,players,"enabled=false, forced=false"
+CONSTRAINT,teams,teams_owner_fk: FOREIGN KEY (owner_id) REFERENCES players(owner_id) ON DELETE CASCADE
+CONSTRAINT,teams,teams_pkey: PRIMARY KEY (owner_id)
+GRANT,teams,"anon: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,teams,"authenticated: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+GRANT,teams,"service_role: DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE"
+INDEX,teams,CREATE UNIQUE INDEX teams_pkey ON public.teams USING btree (owner_id)
+RLS,teams,"enabled=false, forced=false"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -18,6 +18,8 @@ import MenuIcon from "@mui/icons-material/Menu";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { fantaPalette } from "@/theme/fantaPalette";
 import Image from "next/image";
+import { useAuth } from "@/lib/useAuth";
+import { logout } from "@/lib/clientApi";
 
 type NavItem = {
   label: string;
@@ -25,72 +27,20 @@ type NavItem = {
   action?: () => void;
 };
 
-type AuthState = {
-  isLoggedIn: boolean;
-  isAdmin: boolean;
-};
-
-// 🔹 Legge lo stato auth da localStorage (solo lato client)
-function readAuthState(): AuthState {
-  if (typeof window === "undefined") {
-    return { isLoggedIn: false, isAdmin: false };
-  }
-
-  const ownerId = window.localStorage.getItem("fanta_owner_id");
-  const adminFlag = window.localStorage.getItem("fanta_is_admin");
-
-  return {
-    isLoggedIn: !!ownerId,
-    isAdmin: adminFlag === "true",
-  };
-}
-
 export default function MainNavbar() {
   const [open, setOpen] = useState(false);
-  const [auth, setAuth] = useState<AuthState>(() => readAuthState());
+  const { player } = useAuth();
+  const auth = { isLoggedIn: !!player, isAdmin: player?.isAdmin === true };
 
   const pathname = usePathname();
   const router = useRouter();
 
   const handleToggleDrawer = () => setOpen((prev) => !prev);
 
-  const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("fanta_owner_id");
-      window.localStorage.removeItem("fanta_is_admin");
-      // 🔔 Notifica a tutta l'app che l'auth è cambiata
-      window.dispatchEvent(new Event("fanta-auth-change"));
-    }
-    router.push("/login");
-    router.refresh();
+  const handleLogout = async () => {
+    try { await logout(); router.push("/login"); router.refresh(); }
+    catch { window.alert("Logout non riuscito. Riprova."); }
   };
-
-  // 🔔 Ascolta cambiamenti di auth (logout/login/altre tab)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleStorage = (e: StorageEvent) => {
-      if (
-        e.key === "fanta_owner_id" ||
-        e.key === "fanta_is_admin" ||
-        e.key === null // clear()
-      ) {
-        setAuth(readAuthState());
-      }
-    };
-
-    const handleAuthCustomEvent = () => {
-      setAuth(readAuthState());
-    };
-
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("fanta-auth-change", handleAuthCustomEvent);
-
-    return () => {
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("fanta-auth-change", handleAuthCustomEvent);
-    };
-  }, []);
 
   const isActive = (href?: string): boolean =>
     !!href && (pathname === href || pathname.startsWith(`${href}/`));
@@ -101,8 +51,6 @@ export default function MainNavbar() {
   // 🔹 Aggiungo voci solo se loggato
   if (auth.isLoggedIn) {
     navItems.push(
-      { label: "Classifica", href: "/classifica" },
-      { label: "Categorie Regali", href: "/categorie-regali" },
       { label: "Profilo", href: "/profilo" }
     );
 

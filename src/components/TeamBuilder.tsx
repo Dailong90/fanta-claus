@@ -1,241 +1,110 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import type { Participant } from "@/data/participants";
-import {
-  Box,
-  Typography,
-  Card,
-  CardContent,
-  IconButton,
-} from "@mui/material";
+import { Box, Typography, Card, CardContent, IconButton, Button, Alert } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import RedeemIcon from "@mui/icons-material/Redeem";
-import { supabase } from "@/lib/supabaseClient";
 import { fantaPalette } from "@/theme/fantaPalette";
+import { parseTeamResponse } from "@/lib/contracts";
+import { requestJson } from "@/lib/clientApi";
 
-type TeamBuilderProps = {
-  participants: Participant[];
-  playerId: string;
-  isLocked: boolean;
-  maxMembers?: number;
-  onTeamStateChange?: (state: {
-    selectedCount: number;
-    isComplete: boolean;
-    hasCaptain: boolean;
-  }) => void;
+type Team = { members: string[]; captain_id: string | null };
+export type TeamBuilderHandle = { confirm: () => Promise<boolean> };
+export type TeamBuilderState = { selectedCount: number; isComplete: boolean; hasCaptain: boolean; persisted: boolean };
+type Props = {
+  participants: Participant[]; playerId: string; isLocked: boolean; maxMembers?: number;
+  saveRef?: Ref<TeamBuilderHandle>;
+  onPersisted?: () => void;
+  onTeamStateChange?: (state: TeamBuilderState) => void;
 };
-
-type StoredTeam = {
-  owner_id: string;
-  members: string[];
-  captain_id: string | null;
-};
-
-/** Struttura usata nel localStorage nelle versioni nuove */
-type LocalStorageTeamObject = {
-  members: string[];
-  captainId?: string | null;
-};
-
-function isLocalStorageTeamObject(
-  value: unknown
-): value is LocalStorageTeamObject {
-  if (typeof value !== "object" || value === null) return false;
-  if (!("members" in value)) return false;
-
-  const maybeMembers = (value as { members: unknown }).members;
-  return (
-    Array.isArray(maybeMembers) &&
-    maybeMembers.every((m) => typeof m === "string")
-  );
-}
-
-export default function TeamBuilder({
-  participants,
-  playerId,
-  isLocked,
-  maxMembers = 7,
-  onTeamStateChange,
-}: TeamBuilderProps) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [captainId, setCaptainId] = useState<string>("");
+export default function TeamBuilder({ participants, playerId, isLocked, maxMembers = 7, saveRef, onTeamStateChange, onPersisted }: Props) {
+  const [team, setTeam] = useState<Team>({ members: [], captain_id: null });
   const [loading, setLoading] = useState(true);
-  const [highlightedCaptainId, setHighlightedCaptainId] =
-    useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [persisted, setPersisted] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  const version = useRef<string | null>(null);
+  const pending = useRef<Promise<boolean> | null>(null);
+  const latest = useRef(team);
+  const selectedIds = team.members;
+  const captainId = team.captain_id ?? "";
+  const [highlightedCaptainId, setHighlightedCaptainId] = useState("");
+  const disabled = isLocked || loading || saving || error !== null;
 
-  const storageKey = `fanta_claus_team_${playerId}`;
-
-  // Carica squadra: prima da Supabase, poi eventualmente da localStorage
   useEffect(() => {
-    const loadTeam = async () => {
-      setLoading(true);
-
-      console.log("🔎 Carico squadra da Supabase per", playerId);
-
-      const { data, error } = await supabase
-        .from("teams")
-        .select("*")
-        .eq("owner_id", playerId)
-        .maybeSingle();
-
-      if (error) {
-        console.error("❌ Errore Supabase loadTeam", error);
-      }
-
-      if (data) {
-        const team = data as StoredTeam;
-        console.log("✅ Squadra trovata su Supabase:", team);
-        setSelectedIds(team.members || []);
-        setCaptainId(team.captain_id || "");
-        setLoading(false);
-        return;
-      }
-
-      // Fallback vecchia versione: localStorage
-      if (typeof window !== "undefined") {
-        const raw = window.localStorage.getItem(storageKey);
-        if (raw) {
-          try {
-            const parsed: unknown = JSON.parse(raw);
-
-            // Vecchio formato: array semplice di ID
-            if (
-              Array.isArray(parsed) &&
-              parsed.every((m) => typeof m === "string")
-            ) {
-              setSelectedIds(parsed as string[]);
-              setCaptainId("");
-            }
-            // Nuovo formato: oggetto { members, captainId }
-            else if (isLocalStorageTeamObject(parsed)) {
-              setSelectedIds(parsed.members);
-              setCaptainId(
-                typeof parsed.captainId === "string" ? parsed.captainId : ""
-              );
-            } else {
-              setSelectedIds([]);
-              setCaptainId("");
-            }
-          } catch (e) {
-            console.error("Errore parse squadra localStorage", e);
-            setSelectedIds([]);
-            setCaptainId("");
-          }
-        } else {
-          setSelectedIds([]);
-          setCaptainId("");
-        }
-      }
-
-      setLoading(false);
-    };
-
-    loadTeam();
-  }, [playerId, storageKey]);
-
-  // Salva squadra su Supabase (e in localStorage) quando cambia
-  useEffect(() => {
-    const saveTeam = async () => {
-      // Salvo sempre in locale (cache)
-      if (typeof window !== "undefined") {
-        const payloadLocal: LocalStorageTeamObject = {
-          members: selectedIds,
-          captainId: captainId || null,
-        };
-        window.localStorage.setItem(storageKey, JSON.stringify(payloadLocal));
-      }
-
-      // Se la squadra è bloccata, non mando nulla a Supabase
-      if (isLocked) {
-        console.log(
-          "⛔ Squadra bloccata, non invio nulla a Supabase per",
-          playerId
-        );
-        return;
-      }
-
-      const payload: StoredTeam = {
-        owner_id: playerId,
-        members: selectedIds,
-        captain_id: captainId || null,
-      };
-
-      console.log("[FantaClaus] 💾 Salvo squadra su Supabase:", payload);
-
+    let cancelled = false;
+    version.current = null;
+    const load = async () => {
+      setLoading(true); setLoaded(false); setError(null); setPersisted(false);
       try {
-        const { data, error } = await supabase
-          .from("teams")
-          .upsert(payload, { onConflict: "owner_id" });
-
-        if (error) {
-          console.error("[FantaClaus] ❌ Errore Supabase upsert teams", error);
-          if (typeof window !== "undefined") {
-            alert("Errore nel salvataggio su Supabase: " + error.message);
-          }
-          return;
-        }
-
-        console.log("[FantaClaus] ✅ Squadra salvata su Supabase:", data);
-      } catch (err) {
-        console.error("[FantaClaus] ❌ Errore runtime salvataggio", err);
-        if (typeof window !== "undefined") {
-          alert("Errore inatteso nel salvataggio. Controlla la console.");
-        }
-      }
+        const result = await requestJson("/api/team", parseTeamResponse);
+        if (cancelled) return;
+        version.current = result.version; setLoaded(true);
+        const initial = result.team ?? { members: [], captain_id: null };
+        latest.current = initial; setTeam(initial); setPersisted(result.team !== null);
+      } catch { if (!cancelled) setError("Caricamento squadra fallito. Nessuna modifica verrà salvata finché non ricarichi."); }
+      finally { if (!cancelled) setLoading(false); }
     };
+    void load();
+    return () => { cancelled = true; };
+  }, [playerId, reload]);
 
-    if (!loading) {
-      saveTeam();
-    }
-  }, [selectedIds, captainId, playerId, storageKey, isLocked, loading]);
+  const save = useCallback((next: Team) => {
+    if (pending.current || !version.current || isLocked) return;
+    latest.current = next; setTeam(next); setSaving(true); setPersisted(false); setError(null);
+    const operation = (async () => {
+      try {
+        const result = await requestJson("/api/team", parseTeamResponse, {
+          method: "PUT", body: JSON.stringify({ ...next, version: version.current }),
+        });
+        if (!result.team) throw new Error("Salvataggio non confermato.");
+        version.current = result.version; latest.current = result.team;
+        setTeam(result.team); setPersisted(true); onPersisted?.(); return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Salvataggio fallito."); return false;
+      } finally { pending.current = null; setSaving(false); }
+    })();
+    pending.current = operation;
+  }, [isLocked, onPersisted]);
+
+  useImperativeHandle(saveRef, () => ({ confirm: async () => {
+    if (pending.current) return await pending.current;
+    return persisted && !loading && !error;
+  } }), [persisted, loading, error]);
 
   const toggleMember = (id: string) => {
-    if (isLocked) return;
-
-    setSelectedIds((prev) => {
-      if (prev.includes(id)) {
-        const newMembers = prev.filter((m) => m !== id);
-        if (captainId === id) setCaptainId("");
-        return newMembers;
-      }
-
-      if (prev.length >= maxMembers) return prev;
-      return [...prev, id];
-    });
+    if (disabled || pending.current) return;
+    const current = latest.current;
+    const members = current.members.includes(id) ? current.members.filter(member => member !== id) : [...current.members, id];
+    if (members.length > maxMembers) return;
+    save({ members, captain_id: current.captain_id === id ? null : current.captain_id });
   };
-
   const handleSetCaptain = (id: string) => {
-    if (isLocked) return;
-    if (!selectedIds.includes(id)) return;
-
-    setCaptainId(id);
-
-    // piccola animazione quando diventa capitano
+    if (disabled || pending.current || !latest.current.members.includes(id)) return;
+    save({ ...latest.current, captain_id: id });
     setHighlightedCaptainId(id);
-    window.setTimeout(() => {
-      setHighlightedCaptainId("");
-    }, 350);
   };
-
-  // 👉 stato per messaggio sopra i pacchi
+  useEffect(() => {
+    if (!highlightedCaptainId) return;
+    const timer = setTimeout(() => setHighlightedCaptainId(""), 350);
+    return () => clearTimeout(timer);
+  }, [highlightedCaptainId]);
   const hasFullTeam = selectedIds.length === maxMembers;
   const missingSlots = Math.max(0, maxMembers - selectedIds.length);
   const hasCaptain = !!captainId;
-
-  // Notifica al genitore (Profilo) lo stato corrente
   useEffect(() => {
-    if (!onTeamStateChange) return;
-    onTeamStateChange({
-      selectedCount: selectedIds.length,
-      isComplete: hasFullTeam,
-      hasCaptain,
-    });
-  }, [selectedIds.length, hasFullTeam, hasCaptain, onTeamStateChange]);
+    onTeamStateChange?.({ selectedCount: selectedIds.length, isComplete: hasFullTeam, hasCaptain, persisted: persisted && !saving && !loading && !error });
+  }, [selectedIds.length, hasFullTeam, hasCaptain, persisted, saving, loading, error, onTeamStateChange]);
 
   return (
     <Box>
+      {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setReload(value => value + 1)}>Ricarica</Button>}>{error}</Alert>}
+      {error && loaded && <Button disabled={isLocked || saving} onClick={() => save(latest.current)}>Riprova salvataggio</Button>}
+      <Typography role="status" variant="body2">{saving ? "Salvataggio in corso..." : persisted ? "Squadra salvata sul server." : ""}</Typography>
       {isLocked && (
         <Typography color="error" sx={{ mb: 1 }}>
           Il periodo per modificare la squadra è terminato. Puoi solo
@@ -357,7 +226,7 @@ export default function TeamBuilder({
           return (
             <Card
               key={p.id}
-              onClick={isLocked ? undefined : () => toggleMember(p.id)}
+              onClick={disabled ? undefined : () => toggleMember(p.id)}
               sx={{
                 position: "relative",
                 borderRadius: 3,
@@ -420,7 +289,8 @@ export default function TeamBuilder({
               {/* Icona + / - in alto a destra, posizione fissa */}
               <IconButton
                 size="small"
-                disabled={isLocked}
+                aria-label={`${isSelected ? "Rimuovi" : "Aggiungi"} ${p.name}`}
+                disabled={disabled}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleMember(p.id);
@@ -450,7 +320,8 @@ export default function TeamBuilder({
               {isSelected && !isCaptain && (
                 <IconButton
                   size="large"
-                  disabled={isLocked}
+                  aria-label={`Nomina capitano ${p.name}`}
+                  disabled={disabled}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleSetCaptain(p.id);

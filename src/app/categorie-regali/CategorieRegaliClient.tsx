@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Box,
   Container,
@@ -24,7 +23,6 @@ type CategoryRow = {
 };
 
 export default function CategorieRegaliClient() {
-  const router = useRouter();
 
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,14 +30,6 @@ export default function CategorieRegaliClient() {
 
   // ✅ Guard: solo loggati (stesso approccio della navbar)
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const ownerId = window.localStorage.getItem("fanta_owner_id");
-    if (!ownerId) {
-      router.replace("/login");
-      return;
-    }
-
     const load = async () => {
       try {
         setLoading(true);
@@ -63,7 +53,7 @@ export default function CategorieRegaliClient() {
     };
 
     void load();
-  }, [router]);
+  }, []);
 
   const sorted = useMemo(() => {
     return [...categories].sort((a, b) => {

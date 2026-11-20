@@ -1,4 +1,2 @@
-// src/config/gameConfig.ts
-
-// Cambiare qui la data quando si decide il limite massimo
-export const TEAM_LOCK_DEADLINE_ISO = "2025-12-20T23:59:59+01:00";
+// Historical 2025 rule; do not move this date to 2026 without approved configuration.
+export const VOTING_DEADLINE_ISO = "2025-12-16T13:00:00+01:00";

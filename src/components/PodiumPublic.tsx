@@ -11,6 +11,8 @@ import {
   Button,
   Stack,
 } from "@mui/material";
+import { parseLeaderboardResponse } from "@/lib/contracts";
+import { requestJson } from "@/lib/clientApi";
 import { fantaPalette } from "@/theme/fantaPalette";
 
 type MemberScore = {
@@ -38,14 +40,8 @@ export default function PodiumPublic() {
         setLoading(true);
         setError(null);
 
-        const res = await fetch("/api/leaderboard");
-        if (!res.ok) {
-          throw new Error("Errore nel recupero della classifica");
-        }
-
-        const data = (await res.json()) as { teams?: TeamScore[] };
-        const allTeams = data.teams ?? [];
-        setTeams(allTeams);
+        const data = await requestJson("/api/leaderboard", parseLeaderboardResponse);
+        setTeams(data.isPublished ? data.teams : []);
       } catch (err) {
         if (err instanceof Error) {
           setError(err.message);
@@ -57,7 +53,9 @@ export default function PodiumPublic() {
       }
     };
 
-    load();
+    void load();
+    const timer = setInterval(load, 15_000);
+    return () => clearInterval(timer);
   }, []);
 
   const podiumStyles = [

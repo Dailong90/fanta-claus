@@ -1,16 +1,9 @@
 import { redirect } from "next/navigation";
-import ProfiloClientShell from "./ProfiloClientShell";
-import { getSessionFromCookies } from "@/lib/session";
-
+import { currentAccount } from "@/lib/auth";
+import { currentEdition } from "@/lib/edition";
+import EditionFrame from "@/components/EditionFrame";
+import ProfileEditor from "./ProfileEditor";
 export default async function ProfiloPage() {
-  const session = await getSessionFromCookies();
-
-  if (!session) {
-    // Nessuna sessione → vai alla login
-    redirect("/login");
-  }
-
-  const playerId = session.ownerId;
-
-  return <ProfiloClientShell playerId={playerId} />;
+  const account = await currentAccount(); if (!account) redirect("/login");
+  return <EditionFrame title="Il tuo profilo"><ProfileEditor initialAccount={account} edition={await currentEdition()} /></EditionFrame>;
 }

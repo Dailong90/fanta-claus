@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Container,
@@ -8,10 +8,6 @@ import {
   Box,
   Alert,
   Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Paper,
   Table,
   TableHead,
@@ -19,14 +15,17 @@ import {
   TableCell,
   TableBody,
 } from "@mui/material";
-import TeamBuilder from "@/components/TeamBuilder";
+import TeamBuilder, { type TeamBuilderHandle, type TeamBuilderState } from "@/components/TeamBuilder";
+import VotingPanel from "@/components/VotingPanel";
+import { parseTeamResponse } from "@/lib/contracts";
+import { logout, requestJson } from "@/lib/clientApi";
+import { VOTING_DEADLINE_ISO } from "@/config/gameConfig";
 import type { Participant } from "@/data/participants";
 import { participants } from "@/data/participants";
-import { supabase } from "@/lib/supabaseClient";
 import { fantaPalette } from "@/theme/fantaPalette";
 
 // ✅ Deadline votazioni fissa (ora italiana)
-const VOTING_DEADLINE = new Date("2025-12-16T13:00:00+01:00");
+const VOTING_DEADLINE = new Date(VOTING_DEADLINE_ISO);
 
 // 🔹 Funzione di utilità per formattare il countdown in italiano
 function formatTimeLeft(ms: number): string {
@@ -64,159 +63,10 @@ function formatTimeLeft(ms: number): string {
   return `${parts.join(", ")} e ${last}`;
 }
 
-type VoteType = "best_wrapping" | "worst_wrapping" | "most_fitting";
-
-type VoteState = Record<VoteType, string | null>;
-
-const VOTE_LABELS: Record<VoteType, string> = {
-  best_wrapping: "Pacco meglio realizzato +5",
-  worst_wrapping: "Pacco peggio realizzato -5",
-  most_fitting: "Pacco più azzeccato +10",
-};
-
-type VotingPanelProps = {
-  playerId: string;
-  participants: Participant[];
-};
-
-function VotingPanel({ playerId, participants }: VotingPanelProps) {
-  const [votes, setVotes] = useState<VoteState>({
-    best_wrapping: null,
-    worst_wrapping: null,
-    most_fitting: null,
-  });
-  const [loading, setLoading] = useState(true);
-  const [savingType, setSavingType] = useState<VoteType | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const selectableParticipants = useMemo(
-    () => participants.filter((p) => p.id !== playerId),
-    [participants, playerId]
-  );
-
-  // Carica eventuali voti già espressi da questo giocatore
-  useEffect(() => {
-    const loadVotes = async () => {
-      setLoading(true);
-      setErrorMsg(null);
-      try {
-        const res = await fetch(`/api/votes?voter_owner_id=${playerId}`);
-        if (!res.ok) {
-          setErrorMsg("Errore nel caricamento dei tuoi voti.");
-          return;
-        }
-        const json = (await res.json()) as {
-          votes: { target_owner_id: string; vote_type: VoteType }[];
-        };
-
-        const next: VoteState = {
-          best_wrapping: null,
-          worst_wrapping: null,
-          most_fitting: null,
-        };
-
-        json.votes.forEach((v) => {
-          next[v.vote_type] = v.target_owner_id;
-        });
-
-        setVotes(next);
-      } catch (err) {
-        console.error("Errore rete caricamento voti", err);
-        setErrorMsg("Errore di rete nel caricamento dei tuoi voti.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadVotes();
-  }, [playerId]);
-
-  const handleChangeVote = async (voteType: VoteType, targetId: string) => {
-    setVotes((prev) => ({ ...prev, [voteType]: targetId || null }));
-    setSavingType(voteType);
-    setErrorMsg(null);
-
-    try {
-      const res = await fetch("/api/votes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          voter_owner_id: playerId,
-          target_owner_id: targetId,
-          vote_type: voteType,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        const msg = body?.error ?? "Errore nel salvataggio del voto.";
-        setErrorMsg(msg);
-      }
-    } catch (err) {
-      console.error("Errore rete salvataggio voto", err);
-      setErrorMsg("Errore di rete nel salvataggio del voto.");
-    } finally {
-      setSavingType(null);
-    }
-  };
-
-  return (
-    <Box sx={{ mt: 3, mb: 4 }}>
-      <Typography variant="h5" sx={{ mb: 1 }}>
-        Vota i pacchi!
-      </Typography>
-      <Typography variant="body2" sx={{ mb: 2, color: "rgba(75,85,99,0.9)" }}>
-        Ora che le squadre sono chiuse, esprimi il tuo voto: scegli il pacco
-        meglio realizzato, quello peggio realizzato e il reaglo più azzeccato al
-        destinatario. La persona più votata di ognuna delle tre categorie
-        guadagnerà i punti indicati. Non puoi votare te stesso.
-      </Typography>
-
-      {errorMsg && (
-        <Typography variant="body2" sx={{ mb: 2, color: "#f97373" }}>
-          {errorMsg}
-        </Typography>
-      )}
-
-      {loading ? (
-        <Typography variant="body2">Caricamento voti...</Typography>
-      ) : (
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
-            gap: 2,
-          }}
-        >
-          {(Object.keys(VOTE_LABELS) as VoteType[]).map((vt) => (
-            <FormControl key={vt} fullWidth size="small" sx={{ minWidth: 0 }}>
-              <InputLabel id={`vote-${vt}`}>{VOTE_LABELS[vt]}</InputLabel>
-              <Select
-                labelId={`vote-${vt}`}
-                label={VOTE_LABELS[vt]}
-                value={votes[vt] ?? ""}
-                disabled={savingType === vt}
-                onChange={(e) => handleChangeVote(vt, e.target.value as string)}
-              >
-                <MenuItem value="">
-                  <em>Nessuno selezionato</em>
-                </MenuItem>
-                {selectableParticipants.map((p) => (
-                  <MenuItem key={p.id} value={p.id}>
-                    {p.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          ))}
-        </Box>
-      )}
-    </Box>
-  );
-}
-
 type ProfiloClientShellProps = {
   playerId: string;
+  initialName: string;
+  initialIsAdmin: boolean;
 };
 
 // tipi che rispecchiano /api/leaderboard
@@ -234,14 +84,16 @@ type TeamScoreRow = {
   members: MemberScore[];
 };
 
-export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps) {
+export default function ProfiloClientShell({ playerId, initialName, initialIsAdmin }: ProfiloClientShellProps) {
   const router = useRouter();
   const hasPlayerId = !!playerId;
 
-  const [isLocked, setIsLocked] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [playerName, setPlayerName] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const playerName = initialName;
+  const isAdmin = initialIsAdmin;
+  const builderRef = useRef<TeamBuilderHandle>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [teamError, setTeamError] = useState<string | null>(null);
 
   // ✅ “orologio” locale: lo aggiorniamo solo quando la squadra è lockata
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
@@ -256,6 +108,8 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
     captainId: string | null;
   } | null>(null);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [teamRevision, setTeamRevision] = useState(0);
+  const handlePersisted = useCallback(() => setTeamRevision(value => value + 1), []);
 
   // 🔹 punteggi dalla classifica (team ownerId -> dati squadra)
   const [leaderboardMap, setLeaderboardMap] = useState<Record<string, TeamScoreRow>>({});
@@ -280,7 +134,8 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
     });
   }, [deadlineDate]);
 
-  const [timeLeftMs, setTimeLeftMs] = useState<number>(0);
+  const timeLeftMs = deadlineDate ? Math.max(0, deadlineDate.getTime() - nowTs) : 0;
+  const isLocked = !!deadlineDate && nowTs >= deadlineDate.getTime();
 
   // 🔄 Carica deadline da /api/admin/team-deadline
   useEffect(() => {
@@ -305,103 +160,31 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
       }
     };
 
-    loadDeadline();
+    void loadDeadline();
+    const timer = setInterval(loadDeadline, 15_000);
+    return () => clearInterval(timer);
   }, []);
 
-  // 🔒 Gestione blocco + countdown in base alla deadline letta
+  // UI clock only; API authorization always uses server time.
   useEffect(() => {
-    if (!deadlineDate) {
-      setIsLocked(false);
-      setTimeLeftMs(0);
-      return;
-    }
-
-    const update = () => {
-      const diff = deadlineDate.getTime() - Date.now();
-      if (diff <= 0) {
-        setIsLocked(true);
-        setTimeLeftMs(0);
-        return true;
-      } else {
-        setIsLocked(false);
-        setTimeLeftMs(diff);
-        return false;
-      }
-    };
-
-    const finished = update();
-    if (finished) return;
-
-    const interval = setInterval(() => {
-      const done = update();
-      if (done) clearInterval(interval);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [deadlineDate]);
-
-  // ✅ aggiorna "now" solo quando siamo in fase lockata (voti / attesa classifica)
-  useEffect(() => {
-    if (!isLocked) return;
-
-    setNowTs(Date.now());
-    const interval = setInterval(() => setNowTs(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [isLocked]);
+    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const isVotingClosed = useMemo(() => nowTs >= VOTING_DEADLINE.getTime(), [nowTs]);
 
-  // 👤 Carica nome e ruolo (admin) del giocatore da Supabase
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadPlayer = async () => {
-      const { data, error } = await supabase
-        .from("players")
-        .select("name, is_admin")
-        .eq("owner_id", playerId)
-        .maybeSingle<{ name: string; is_admin: boolean }>();
-
-      if (cancelled) return;
-
-      if (error) {
-        console.error("❌ Errore caricamento giocatore", error);
-        setPlayerName(null);
-        setIsAdmin(false);
-        return;
-      }
-
-      setPlayerName(data?.name ?? null);
-      setIsAdmin(!!data?.is_admin);
-    };
-
-    if (playerId) {
-      loadPlayer();
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [playerId]);
-
   // 📋 Carica la squadra per il riepilogo (usata quando isLocked = true)
   useEffect(() => {
-    if (!playerId) return;
+    if (!playerId || !isLocked) return;
 
+    let cancelled = false;
     const loadTeamSummary = async () => {
       setTeamLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("teams")
-          .select("members, captain_id")
-          .eq("owner_id", playerId)
-          .maybeSingle<{ members: string[]; captain_id: string | null }>();
-
-        if (error) {
-          console.error("❌ Errore caricamento squadra per riepilogo", error);
-          setTeamSummary(null);
-          return;
-        }
+        setTeamError(null);
+        const result = await requestJson("/api/team", parseTeamResponse);
+        if (cancelled) return;
+        const data = result.team;
 
         if (!data) {
           setTeamSummary(null);
@@ -415,23 +198,28 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
           members: memberObjects,
           captainId: data.captain_id,
         });
+      } catch { if (!cancelled) setTeamError("Impossibile caricare la squadra salvata.");
       } finally {
-        setTeamLoading(false);
+        if (!cancelled) setTeamLoading(false);
       }
     };
 
-    loadTeamSummary();
-  }, [playerId]);
+    void loadTeamSummary();
+    return () => { cancelled = true; };
+  }, [playerId, isLocked, teamRevision]);
 
   // 🔢 Carica punteggi dalla leaderboard quando il periodo è scaduto
   useEffect(() => {
     if (!isLocked) return;
 
+    let cancelled = false;
     const loadScores = async () => {
       setScoresLoading(true);
+      setLeaderboardMap({});
       setScoresError(null);
       try {
         const res = await fetch("/api/leaderboard");
+        if (cancelled) return;
         if (!res.ok) {
           console.error("Errore lettura leaderboard", await res.text());
           setScoresError("Impossibile caricare i punteggi della classifica.");
@@ -446,35 +234,29 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
           map[row.ownerId] = row;
         });
 
-        setLeaderboardMap(map);
+        if (!cancelled) setLeaderboardMap(map);
       } catch (err) {
         console.error("Errore rete leaderboard", err);
-        setScoresError("Errore di rete nel caricamento dei punteggi.");
+        if (!cancelled) setScoresError("Errore di rete nel caricamento dei punteggi.");
       } finally {
-        setScoresLoading(false);
+        if (!cancelled) setScoresLoading(false);
       }
     };
 
-    loadScores();
+    void loadScores();
+    return () => { cancelled = true; };
+  }, [isLocked, teamRevision]);
+
+  const handleTeamStateChange = useCallback((state: TeamBuilderState) => {
+    setCanSave(!isLocked && state.isComplete && state.hasCaptain && state.persisted);
+    if (!state.persisted) setShowSavedAlert(false);
   }, [isLocked]);
-
-  // callback che riceve lo stato della squadra dal TeamBuilder
-  const handleTeamStateChange = (state: {
-    selectedCount: number;
-    isComplete: boolean;
-    hasCaptain: boolean;
-  }) => {
-    if (isLocked) {
-      setCanSave(false);
-      return;
-    }
-    setCanSave(state.isComplete && state.hasCaptain);
-  };
-
-  // 🚀 click su "Salva squadra" → solo feedback visivo
-  const handleSave = () => {
+  const handleSave = async () => {
+    setSaveError(null);
     if (!canSave) return;
-    setShowSavedAlert(true);
+    const confirmed = await builderRef.current?.confirm();
+    if (confirmed) setShowSavedAlert(true);
+    else setSaveError("Squadra non salvata. Verifica lo stato e riprova.");
   };
 
   // nasconde l'alert dopo qualche secondo
@@ -484,26 +266,12 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
     return () => clearTimeout(t);
   }, [showSavedAlert]);
 
-  // 🚪 Logout
   const handleLogout = async () => {
     setLoggingOut(true);
-
     try {
-      await fetch("/api/logout", { method: "POST" });
-    } catch (err) {
-      console.error("❌ Errore logout", err);
-    }
-
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("fanta_owner_id");
-      window.localStorage.removeItem("fanta_is_admin");
-      window.dispatchEvent(new Event("fanta-auth-change"));
-    }
-
-    setLoggingOut(false);
-
-    router.push("/login");
-    router.refresh();
+      await logout(); router.push("/login"); router.refresh();
+    } catch { setSaveError("Logout non riuscito. Riprova."); }
+    finally { setLoggingOut(false); }
   };
 
   const myLeaderboardRow = leaderboardMap[playerId];
@@ -667,7 +435,8 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                 La tua squadra
               </Typography>
 
-              {teamLoading ? (
+              {teamError && <Alert severity="error">{teamError}</Alert>}
+            {teamError ? null : teamLoading ? (
                 <Typography variant="body2" sx={{ color: fantaPalette.textSecondary }}>
                   Caricamento della tua squadra...
                 </Typography>
@@ -841,7 +610,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                   Errore nella data limite ⚠️
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  {deadlineError} Puoi comunque modificare la squadra al momento.
+                  {deadlineError} Le modifiche sono sospese finché la configurazione non è disponibile.
                 </Typography>
               </>
             ) : !deadlineDate ? (
@@ -910,8 +679,11 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
             ) : (
               <VotingPanel playerId={playerId} participants={participants} />
             )
+          ) : deadlineLoading || deadlineError || !deadlineDate ? (
+            <Alert severity={deadlineError ? "error" : "info"}>{deadlineLoading ? "Caricamento configurazione..." : deadlineError ?? "Scadenza non configurata. Modifiche sospese."}</Alert>
           ) : (
             <>
+              {saveError && <Alert severity="error">{saveError}</Alert>}
               {showSavedAlert && (
                 <Alert
                   severity="success"
@@ -926,6 +698,7 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
                 <Button
                   variant="contained"
                   onClick={handleSave}
+                  disabled={!canSave}
                   sx={{
                     px: 5,
                     py: 1.6,
@@ -952,6 +725,8 @@ export default function ProfiloClientShell({ playerId }: ProfiloClientShellProps
               </Box>
 
               <TeamBuilder
+                saveRef={builderRef}
+                onPersisted={handlePersisted}
                 participants={participants}
                 playerId={playerId}
                 isLocked={Boolean(deadlineDate && isLocked)}
